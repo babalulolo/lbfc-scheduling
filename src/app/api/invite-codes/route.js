@@ -10,7 +10,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    const codes = getAccessCodes();
+    const codes = await getAccessCodes();
     return NextResponse.json({ codes });
   } catch (error) {
     console.error('Get access codes error:', error);
@@ -31,8 +31,9 @@ export async function PUT(request) {
     if (volunteer) updates.volunteer = volunteer.toUpperCase().trim();
     if (admin) updates.admin = admin.toUpperCase().trim();
 
-    setAccessCodes(updates);
-    return NextResponse.json({ success: true, codes: getAccessCodes() });
+    await setAccessCodes(updates);
+    const codes = await getAccessCodes();
+    return NextResponse.json({ success: true, codes });
   } catch (error) {
     console.error('Update access codes error:', error);
     return NextResponse.json({ error: 'Something went wrong' }, { status: 500 });

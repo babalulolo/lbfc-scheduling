@@ -9,7 +9,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    const users = getAllUsers();
+    const users = await getAllUsers();
     const volunteers = users.map((u) => ({
       id: u.id,
       email: u.email,

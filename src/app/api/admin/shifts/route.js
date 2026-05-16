@@ -17,7 +17,7 @@ export async function POST(request) {
     }
 
     const id = uuidv4();
-    const shift = createShift({
+    const shift = await createShift({
       id,
       title,
       description: description || null,
@@ -52,7 +52,7 @@ export async function PUT(request) {
       return NextResponse.json({ error: 'Shift ID is required' }, { status: 400 });
     }
 
-    const existing = getShiftById(id);
+    const existing = await getShiftById(id);
     if (!existing) {
       return NextResponse.json({ error: 'Shift not found' }, { status: 404 });
     }
@@ -68,7 +68,7 @@ export async function PUT(request) {
     if (notes !== undefined) updates.notes = notes;
     if (slotsTotal !== undefined) updates.slotsTotal = slotsTotal;
 
-    updateShift(id, updates);
+    await updateShift(id, updates);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Update shift error:', error);
@@ -88,7 +88,7 @@ export async function DELETE(request) {
       return NextResponse.json({ error: 'Shift ID is required' }, { status: 400 });
     }
 
-    deleteShift(id);
+    await deleteShift(id);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Delete shift error:', error);

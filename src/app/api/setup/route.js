@@ -6,7 +6,7 @@ import crypto from 'crypto';
 
 export async function POST(request) {
   try {
-    if (hasAnyUsers()) {
+    if (await hasAnyUsers()) {
       return NextResponse.json({ error: 'Setup has already been completed. An admin account exists.' }, { status: 400 });
     }
 
@@ -18,7 +18,7 @@ export async function POST(request) {
     const id = uuidv4();
     const passwordHash = await bcrypt.hash(password, 10);
 
-    createUser({
+    await createUser({
       id,
       email,
       name,
@@ -35,9 +35,10 @@ export async function POST(request) {
     for (let i = 0; i < 5; i++) {
       const codeId = uuidv4();
       const code = 'LBFC-' + crypto.randomBytes(4).toString('hex').toUpperCase();
-      createInviteCode({
+      await createInviteCode({
         id: codeId,
         code,
+        role: 'volunteer',
         createdBy: id,
         usedBy: null,
         usedAt: null,

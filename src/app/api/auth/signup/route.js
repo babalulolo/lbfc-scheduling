@@ -13,13 +13,13 @@ export async function POST(request) {
     }
 
     // Validate access code and determine role
-    const role = validateAccessCode(inviteCode);
+    const role = await validateAccessCode(inviteCode);
     if (!role) {
       return NextResponse.json({ error: 'Invalid access code' }, { status: 400 });
     }
 
     // Check if email already exists
-    const existing = findUser(email);
+    const existing = await findUser(email);
     if (existing) {
       return NextResponse.json({ error: 'An account with this email already exists' }, { status: 400 });
     }
@@ -27,7 +27,7 @@ export async function POST(request) {
     const id = uuidv4();
     const passwordHash = await bcrypt.hash(password, 10);
 
-    createUser({
+    await createUser({
       id,
       email,
       name,
