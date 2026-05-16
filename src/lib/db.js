@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 
 const DB_PATH = path.join(process.cwd(), 'data', 'db.json');
+const SEED_PATH = path.join(process.cwd(), 'data', 'seed.json');
 
 const DEFAULT_DB = {
   users: [],
@@ -15,14 +16,46 @@ function ensureDir() {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
+function loadSeedData() {
+  try {
+    if (fs.existsSync(SEED_PATH)) {
+      const raw = fs.readFileSync(SEED_PATH, 'utf-8');
+      const seed = JSON.parse(raw);
+      return {
+        ...DEFAULT_DB,
+        shifts: seed.shifts || [],
+        inviteCodes: seed.inviteCodes || [],
+        accessCodes: seed.accessCodes || undefined,
+      };
+    }
+  } catch (e) {
+    console.error('Failed to load seed data:', e.message);
+  }
+  return DEFAULT_DB;
+}
+
 export function readDb() {
   ensureDir();
   if (!fs.existsSync(DB_PATH)) {
-    fs.writeFileSync(DB_PATH, JSON.stringify(DEFAULT_DB, null, 2));
-    return structuredClone(DEFAULT_DB);
+    const initial = loadSeedData();
+    fs.writeFileSync(DB_PATH, JSON.stringify(initial, null, 2));
+    return structuredClone(initial);
   }
   const raw = fs.readFileSync(DB_PATH, 'utf-8');
-  return JSON.parse(raw);
+  const data = JSON.parse(raw);
+
+  // If db exists but has no shifts and no users, seed it
+  if (data.shifts.length === 0 && data.users.length === 0) {
+    const seed = loadSeedData();
+    if (seed.shifts.length > 0) {
+      data.shifts = seed.shifts;
+      data.inviteCodes = seed.inviteCodes || data.inviteCodes;
+      data.accessCodes = seed.accessCodes || data.accessCodes;
+      fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
+    }
+  }
+
+  return data;
 }
 
 export function writeDb(data) {
@@ -147,6 +180,14 @@ export function validateAccessCode(code) {
 export function getAllUsers() {
   const db = readDb();
   return db.users;
+}
+
+export function createInviteCode(inviteCode) {
+  const db = readDb();
+  if (!db.inviteCodes) db.inviteCodes = [];
+  db.inviteCodes.push(inviteCode);
+  writeDb(db);
+  return inviteCode;
 }
 
 export function hasAnyUsers() {

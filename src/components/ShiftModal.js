@@ -8,6 +8,7 @@ export default function ShiftModal({ shift, onClose, onSignup, onCancel }) {
   if (!shift) return null;
 
   const formatTime = (t) => {
+    if (!t) return '';
     const [h, m] = t.split(':');
     const hour = parseInt(h);
     const ampm = hour >= 12 ? 'PM' : 'AM';
@@ -48,34 +49,46 @@ export default function ShiftModal({ shift, onClose, onSignup, onCancel }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+    <div className="modal-sheet bg-black/50 z-50" onClick={onClose}>
       <div
-        className="bg-white rounded-2xl shadow-xl max-w-md w-full fade-in"
+        className="modal-sheet-inner bg-white shadow-xl slide-up"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-6">
+        {/* Drag handle — visible on mobile only */}
+        <div className="flex justify-center pt-3 pb-1 sm:hidden">
+          <div className="w-10 h-1 bg-gray-300 rounded-full" />
+        </div>
+
+        <div className="p-5 sm:p-6">
           <div className="flex justify-between items-start mb-4">
-            <h2 className="text-xl font-bold text-[#2d5016]">{shift.title}</h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+            <h2 className="text-xl font-bold text-[#2d5016] pr-4">{shift.title}</h2>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 text-2xl leading-none flex-shrink-0"
+            >
+              &times;
+            </button>
           </div>
 
           {shift.description && (
-            <p className="text-gray-600 mb-4">{shift.description}</p>
+            <p className="text-gray-600 mb-4 text-sm">{shift.description}</p>
           )}
 
           <div className="space-y-3 mb-6">
             <div className="flex items-start gap-3">
               <span className="text-lg">📅</span>
               <div>
-                <p className="font-medium">{formatDate(shift.date)}</p>
-                <p className="text-sm text-gray-500">{formatTime(shift.startTime || shift.start_time)} – {formatTime(shift.endTime || shift.end_time)}</p>
+                <p className="font-medium text-sm sm:text-base">{formatDate(shift.date)}</p>
+                <p className="text-sm text-gray-500">
+                  {formatTime(shift.startTime || shift.start_time)} – {formatTime(shift.endTime || shift.end_time)}
+                </p>
               </div>
             </div>
 
             <div className="flex items-start gap-3">
               <span className="text-lg">📍</span>
               <div>
-                <p className="font-medium">{shift.location}</p>
+                <p className="font-medium text-sm sm:text-base">{shift.location}</p>
                 {(shift.locationAddress || shift.location_address) && (
                   <p className="text-sm text-gray-500">{shift.locationAddress || shift.location_address}</p>
                 )}
@@ -84,7 +97,7 @@ export default function ShiftModal({ shift, onClose, onSignup, onCancel }) {
 
             <div className="flex items-start gap-3">
               <span className="text-lg">👥</span>
-              <p>
+              <p className="text-sm sm:text-base">
                 <span className="font-medium">{shift.slotsRemaining}</span>
                 <span className="text-gray-500"> of {shift.slotsTotal || shift.slots_total} spots remaining</span>
               </p>
@@ -93,7 +106,7 @@ export default function ShiftModal({ shift, onClose, onSignup, onCancel }) {
             {shift.notes && (
               <div className="flex items-start gap-3">
                 <span className="text-lg">📝</span>
-                <p className="text-gray-600">{shift.notes}</p>
+                <p className="text-gray-600 text-sm">{shift.notes}</p>
               </div>
             )}
 
@@ -115,7 +128,7 @@ export default function ShiftModal({ shift, onClose, onSignup, onCancel }) {
               <button
                 onClick={handleAction}
                 disabled={loading}
-                className={`flex-1 py-3 px-4 rounded-xl font-medium transition text-white ${
+                className={`flex-1 py-3 px-4 rounded-xl font-medium transition text-white text-sm sm:text-base ${
                   shift.isSignedUp
                     ? 'bg-red-500 hover:bg-red-600'
                     : 'bg-[#2d5016] hover:bg-[#1a3a0a]'
@@ -128,7 +141,7 @@ export default function ShiftModal({ shift, onClose, onSignup, onCancel }) {
                   : 'Sign Up for This Shift'}
               </button>
             ) : (
-              <div className="flex-1 py-3 px-4 rounded-xl font-medium text-center bg-gray-100 text-gray-500">
+              <div className="flex-1 py-3 px-4 rounded-xl font-medium text-center bg-gray-100 text-gray-500 text-sm">
                 This shift is full
               </div>
             )}
@@ -138,9 +151,9 @@ export default function ShiftModal({ shift, onClose, onSignup, onCancel }) {
                 href={gcalUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="py-3 px-4 rounded-xl font-medium border-2 border-[#2d5016] text-[#2d5016] hover:bg-[#f0f7e6] transition text-center"
+                className="py-3 px-4 rounded-xl font-medium border-2 border-[#2d5016] text-[#2d5016] hover:bg-[#f0f7e6] transition text-center text-sm whitespace-nowrap"
               >
-                + Calendar
+                + Cal
               </a>
             )}
           </div>

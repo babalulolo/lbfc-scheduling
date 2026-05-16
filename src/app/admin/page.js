@@ -61,7 +61,7 @@ export default function AdminPage() {
     <div className="min-h-screen">
       <Navbar user={user} />
       <main className="max-w-6xl mx-auto px-4 py-6">
-        <h1 className="text-2xl font-bold text-[#2d5016] mb-4">Admin Dashboard</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-[#2d5016] mb-4">Admin Dashboard</h1>
 
         {message && (
           <div className={`mb-4 p-3 rounded-xl text-sm font-medium fade-in ${
@@ -71,22 +71,23 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* Tabs */}
-        <div className="flex gap-1 mb-6 bg-gray-100 rounded-xl p-1 w-fit">
-          {['shifts', 'volunteers', 'access codes'].map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition capitalize ${
-                tab === t ? 'bg-white shadow-sm text-[#2d5016]' : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {t}
-            </button>
-          ))}
+        {/* Tabs — scrollable on mobile */}
+        <div className="overflow-x-auto -mx-4 px-4 mb-6">
+          <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit min-w-max">
+            {['shifts', 'volunteers', 'access codes'].map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition capitalize whitespace-nowrap ${
+                  tab === t ? 'bg-white shadow-sm text-[#2d5016]' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Shifts Tab */}
         {tab === 'shifts' && (
           <ShiftsTab
             shifts={shifts}
@@ -98,16 +99,8 @@ export default function AdminPage() {
             flash={flash}
           />
         )}
-
-        {/* Volunteers Tab */}
-        {tab === 'volunteers' && (
-          <VolunteersTab volunteers={volunteers} />
-        )}
-
-        {/* Invite Codes Tab */}
-        {tab === 'access codes' && (
-          <AccessCodesTab codes={accessCodes} onRefresh={fetchData} flash={flash} />
-        )}
+        {tab === 'volunteers' && <VolunteersTab volunteers={volunteers} />}
+        {tab === 'access codes' && <AccessCodesTab codes={accessCodes} onRefresh={fetchData} flash={flash} />}
       </main>
     </div>
   );
@@ -144,11 +137,9 @@ function ShiftsTab({ shifts, showNewShift, setShowNewShift, editingShift, setEdi
   async function handleSubmit(e) {
     e.preventDefault();
     const isEditing = !!editingShift;
-    const url = '/api/admin/shifts';
     const method = isEditing ? 'PUT' : 'POST';
     const body = isEditing ? { ...form, id: editingShift.id } : form;
-
-    const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const res = await fetch('/api/admin/shifts', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     if (res.ok) {
       flash('success', isEditing ? 'Shift updated' : 'Shift created');
       resetForm();
@@ -162,131 +153,131 @@ function ShiftsTab({ shifts, showNewShift, setShowNewShift, editingShift, setEdi
   async function handleDelete(id) {
     if (!confirm('Delete this shift? This will also remove all signups.')) return;
     const res = await fetch('/api/admin/shifts', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
-    if (res.ok) {
-      flash('success', 'Shift deleted');
-      onRefresh();
-    }
+    if (res.ok) { flash('success', 'Shift deleted'); onRefresh(); }
   }
 
   const formatTime = (t) => {
+    if (!t) return '';
     const [h, m] = t.split(':');
     const hour = parseInt(h);
     return `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`;
   };
+
+  const inputClass = "w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:border-[#2d5016] focus:ring-1 focus:ring-[#2d5016] outline-none text-sm";
 
   return (
     <div>
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-lg font-semibold">Manage Shifts</h2>
         {!showNewShift && !editingShift && (
-          <button onClick={() => setShowNewShift(true)} className="bg-[#2d5016] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#1a3a0a] transition">
+          <button onClick={() => setShowNewShift(true)}
+            className="bg-[#2d5016] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-[#1a3a0a] transition">
             + New Shift
           </button>
         )}
       </div>
 
       {(showNewShift || editingShift) && (
-        <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-100 p-6 mb-6 shadow-sm">
+        <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-100 p-4 sm:p-6 mb-6 shadow-sm">
           <h3 className="font-semibold mb-4">{editingShift ? 'Edit Shift' : 'Create New Shift'}</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">Shift Title *</label>
               <input type="text" required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })}
-                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:border-[#2d5016] focus:ring-1 focus:ring-[#2d5016] outline-none"
-                placeholder="e.g., Food Rescue Pickup" />
+                className={inputClass} placeholder="e.g., Food Rescue Pickup" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Date *</label>
               <input type="date" required value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })}
-                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:border-[#2d5016] focus:ring-1 focus:ring-[#2d5016] outline-none" />
+                className={inputClass} />
             </div>
             <div className="flex gap-3">
               <div className="flex-1">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Start *</label>
                 <input type="time" required value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:border-[#2d5016] focus:ring-1 focus:ring-[#2d5016] outline-none" />
+                  className={inputClass} />
               </div>
               <div className="flex-1">
                 <label className="block text-sm font-medium text-gray-700 mb-1">End *</label>
                 <input type="time" required value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:border-[#2d5016] focus:ring-1 focus:ring-[#2d5016] outline-none" />
+                  className={inputClass} />
               </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Location Name *</label>
               <input type="text" required value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })}
-                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:border-[#2d5016] focus:ring-1 focus:ring-[#2d5016] outline-none"
-                placeholder="e.g., Ralphs on 4th St" />
+                className={inputClass} placeholder="e.g., Ralphs on 4th St" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
               <input type="text" value={form.locationAddress} onChange={(e) => setForm({ ...form, locationAddress: e.target.value })}
-                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:border-[#2d5016] focus:ring-1 focus:ring-[#2d5016] outline-none"
-                placeholder="Full street address" />
+                className={inputClass} placeholder="Full street address" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Volunteer Slots</label>
-              <input type="number" min="1" max="50" value={form.slotsTotal} onChange={(e) => setForm({ ...form, slotsTotal: parseInt(e.target.value) || 5 })}
-                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:border-[#2d5016] focus:ring-1 focus:ring-[#2d5016] outline-none" />
+              <input type="number" min="1" max="50" value={form.slotsTotal}
+                onChange={(e) => setForm({ ...form, slotsTotal: parseInt(e.target.value) || 5 })}
+                className={inputClass} />
             </div>
             <div className="sm:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
               <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2}
-                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:border-[#2d5016] focus:ring-1 focus:ring-[#2d5016] outline-none"
-                placeholder="Brief description of this shift" />
+                className={inputClass} placeholder="Brief description of this shift" />
             </div>
             <div className="sm:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">Pickup Notes</label>
               <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2}
-                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:border-[#2d5016] focus:ring-1 focus:ring-[#2d5016] outline-none"
-                placeholder="Any special instructions for volunteers (e.g., go to the back loading dock, ask for the manager)" />
+                className={inputClass} placeholder="Special instructions for volunteers" />
             </div>
           </div>
           <div className="flex gap-3 mt-4">
             <button type="submit" className="bg-[#2d5016] text-white px-6 py-2.5 rounded-xl text-sm font-medium hover:bg-[#1a3a0a] transition">
               {editingShift ? 'Save Changes' : 'Create Shift'}
             </button>
-            <button type="button" onClick={resetForm} className="px-6 py-2.5 rounded-xl text-sm font-medium border border-gray-200 hover:bg-gray-50 transition">
+            <button type="button" onClick={resetForm}
+              className="px-6 py-2.5 rounded-xl text-sm font-medium border border-gray-200 hover:bg-gray-50 transition">
               Cancel
             </button>
           </div>
         </form>
       )}
 
-      {/* Shift list */}
       <div className="space-y-3">
         {shifts.length === 0 ? (
           <p className="text-gray-400 text-center py-12">No shifts yet. Create your first one above.</p>
         ) : (
           shifts.map((shift) => (
-            <div key={shift.id} className="bg-white rounded-xl border border-gray-100 p-4 flex items-center justify-between shadow-sm">
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-semibold">{shift.title}</h3>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
-                    {shift.signupCount}/{shift.slotsTotal || shift.slots_total} signed up
-                  </span>
-                </div>
-                <p className="text-sm text-gray-500">
-                  {new Date(shift.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                  {' · '}
-                  {formatTime(shift.startTime || shift.start_time)} – {formatTime(shift.endTime || shift.end_time)}
-                  {' · '}
-                  {shift.location}
-                </p>
-                {shift.signups && shift.signups.length > 0 && (
-                  <p className="text-xs text-gray-400 mt-1">
-                    Volunteers: {shift.signups.map(s => `${s.name} (${s.email})`).join(', ')}
+            <div key={shift.id} className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <h3 className="font-semibold">{shift.title}</h3>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 whitespace-nowrap">
+                      {shift.signupCount}/{shift.slotsTotal || shift.slots_total} signed up
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-500">
+                    {new Date(shift.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                    {' · '}
+                    {formatTime(shift.startTime || shift.start_time)} – {formatTime(shift.endTime || shift.end_time)}
                   </p>
-                )}
-              </div>
-              <div className="flex gap-2 ml-4">
-                <button onClick={() => setEditingShift(shift)} className="text-sm px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition">
-                  Edit
-                </button>
-                <button onClick={() => handleDelete(shift.id)} className="text-sm px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition">
-                  Delete
-                </button>
+                  <p className="text-sm text-gray-400">{shift.location}</p>
+                  {shift.signups && shift.signups.length > 0 && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      Volunteers: {shift.signups.map(s => s.name).join(', ')}
+                    </p>
+                  )}
+                </div>
+                <div className="flex gap-2 flex-shrink-0">
+                  <button onClick={() => setEditingShift(shift)}
+                    className="text-sm px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition">
+                    Edit
+                  </button>
+                  <button onClick={() => handleDelete(shift.id)}
+                    className="text-sm px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition">
+                    Delete
+                  </button>
+                </div>
               </div>
             </div>
           ))
@@ -303,34 +294,54 @@ function VolunteersTab({ volunteers }) {
       {volunteers.length === 0 ? (
         <p className="text-gray-400 text-center py-12">No volunteers yet.</p>
       ) : (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100">
-                <th className="text-left py-3 px-4 font-medium text-gray-500">Name</th>
-                <th className="text-left py-3 px-4 font-medium text-gray-500">Email</th>
-                <th className="text-left py-3 px-4 font-medium text-gray-500">Phone</th>
-                <th className="text-left py-3 px-4 font-medium text-gray-500">Role</th>
-                <th className="text-left py-3 px-4 font-medium text-gray-500">Joined</th>
-              </tr>
-            </thead>
-            <tbody>
-              {volunteers.map((v) => (
-                <tr key={v.id} className="border-b border-gray-50 last:border-0">
-                  <td className="py-3 px-4 font-medium">{v.name}</td>
-                  <td className="py-3 px-4 text-gray-500">{v.email}</td>
-                  <td className="py-3 px-4 text-gray-500">{v.phone || '—'}</td>
-                  <td className="py-3 px-4">
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${v.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}`}>
-                      {v.role}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-gray-400">{new Date(v.createdAt || v.created_at).toLocaleDateString()}</td>
+        <>
+          {/* Mobile: card view */}
+          <div className="sm:hidden space-y-3">
+            {volunteers.map((v) => (
+              <div key={v.id} className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="font-semibold">{v.name}</p>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${v.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}`}>
+                    {v.role}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-500">{v.email}</p>
+                {v.phone && <p className="text-sm text-gray-500">{v.phone}</p>}
+                <p className="text-xs text-gray-400 mt-1">Joined {new Date(v.createdAt || v.created_at).toLocaleDateString()}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop: table view */}
+          <div className="hidden sm:block bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100">
+                  <th className="text-left py-3 px-4 font-medium text-gray-500">Name</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-500">Email</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-500">Phone</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-500">Role</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-500">Joined</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {volunteers.map((v) => (
+                  <tr key={v.id} className="border-b border-gray-50 last:border-0">
+                    <td className="py-3 px-4 font-medium">{v.name}</td>
+                    <td className="py-3 px-4 text-gray-500">{v.email}</td>
+                    <td className="py-3 px-4 text-gray-500">{v.phone || '—'}</td>
+                    <td className="py-3 px-4">
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${v.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}`}>
+                        {v.role}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-gray-400">{new Date(v.createdAt || v.created_at).toLocaleDateString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );
@@ -353,12 +364,8 @@ function AccessCodesTab({ codes, onRefresh, flash }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ volunteer: volunteerCode, admin: adminCode }),
     });
-    if (res.ok) {
-      flash('success', 'Access codes updated');
-      onRefresh();
-    } else {
-      flash('error', 'Failed to update codes');
-    }
+    if (res.ok) { flash('success', 'Access codes updated'); onRefresh(); }
+    else { flash('error', 'Failed to update codes'); }
     setSaving(false);
   }
 
@@ -373,11 +380,11 @@ function AccessCodesTab({ codes, onRefresh, flash }) {
       <p className="text-sm text-gray-500 mb-6">Share these codes with people so they can create accounts. Everyone uses the same code — no need to generate individual ones.</p>
 
       <div className="space-y-4 max-w-lg">
-        <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+        <div className="bg-white rounded-2xl border border-gray-100 p-4 sm:p-5 shadow-sm">
           <div className="flex items-center justify-between mb-3">
             <div>
               <h3 className="font-semibold text-[#2d5016]">Volunteer Code</h3>
-              <p className="text-xs text-gray-400">Share with approved volunteers to let them sign up</p>
+              <p className="text-xs text-gray-400">Share with approved volunteers</p>
             </div>
             <button onClick={() => copyCode(volunteerCode, 'volunteer')}
               className="text-xs px-3 py-1.5 rounded-lg bg-[#f0f7e6] text-[#2d5016] hover:bg-[#e0efd6] transition">
@@ -386,14 +393,14 @@ function AccessCodesTab({ codes, onRefresh, flash }) {
           </div>
           <input type="text" value={volunteerCode}
             onChange={(e) => setVolunteerCode(e.target.value.toUpperCase())}
-            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:border-[#2d5016] focus:ring-1 focus:ring-[#2d5016] outline-none font-mono tracking-wider text-lg" />
+            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:border-[#2d5016] focus:ring-1 focus:ring-[#2d5016] outline-none font-mono tracking-wider text-base sm:text-lg" />
         </div>
 
-        <div className="bg-white rounded-2xl border border-purple-100 p-5 shadow-sm">
+        <div className="bg-white rounded-2xl border border-purple-100 p-4 sm:p-5 shadow-sm">
           <div className="flex items-center justify-between mb-3">
             <div>
               <h3 className="font-semibold text-purple-700">Admin Code</h3>
-              <p className="text-xs text-gray-400">Only share with coordinators who need admin access</p>
+              <p className="text-xs text-gray-400">Only share with coordinators</p>
             </div>
             <button onClick={() => copyCode(adminCode, 'admin')}
               className="text-xs px-3 py-1.5 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 transition">
@@ -402,11 +409,11 @@ function AccessCodesTab({ codes, onRefresh, flash }) {
           </div>
           <input type="text" value={adminCode}
             onChange={(e) => setAdminCode(e.target.value.toUpperCase())}
-            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none font-mono tracking-wider text-lg" />
+            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none font-mono tracking-wider text-base sm:text-lg" />
         </div>
 
         <button onClick={handleSave} disabled={saving}
-          className="bg-[#2d5016] text-white px-6 py-2.5 rounded-xl text-sm font-medium hover:bg-[#1a3a0a] transition disabled:opacity-50">
+          className="bg-[#2d5016] text-white px-6 py-2.5 rounded-xl text-sm font-medium hover:bg-[#1a3a0a] transition disabled:opacity-50 w-full sm:w-auto">
           {saving ? 'Saving...' : 'Save Changes'}
         </button>
       </div>
