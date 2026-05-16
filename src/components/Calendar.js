@@ -7,18 +7,20 @@ const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'];
 
-const SHORT_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
 export default function Calendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [shifts, setShifts] = useState([]);
   const [selectedShift, setSelectedShift] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(null); // for mobile day detail
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState(null);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
   const monthStr = `${year}-${String(month + 1).padStart(2, '0')}`;
+
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
   const fetchShifts = useCallback(async () => {
     setLoading(true);
@@ -35,11 +37,27 @@ export default function Calendar() {
 
   useEffect(() => {
     fetchShifts();
+    setSelectedDate(null);
   }, [fetchShifts]);
+
+  // Auto-select today or first day with shifts when month loads
+  useEffect(() => {
+    if (loading || shifts.length === 0) return;
+    const todayShifts = shifts.filter(s => s.date === todayStr);
+    if (todayShifts.length > 0) {
+      setSelectedDate(todayStr);
+    } else {
+      const first = shifts.slice().sort((a, b) => a.date.localeCompare(b.date))[0];
+      if (first) setSelectedDate(first.date);
+    }
+  }, [loading, shifts, todayStr]);
 
   function prevMonth() { setCurrentDate(new Date(year, month - 1, 1)); }
   function nextMonth() { setCurrentDate(new Date(year, month + 1, 1)); }
-  function goToToday() { setCurrentDate(new Date()); }
+  function goToToday() {
+    setCurrentDate(new Date());
+    setSelectedDate(todayStr);
+  }
 
   async function handleSignup(shiftId) {
     const res = await fetch('/api/shifts/signup', {
@@ -51,9 +69,7 @@ export default function Calendar() {
     if (res.ok) {
       setMessage({ type: 'success', text: "You're signed up! Check your email for confirmation." });
       await fetchShifts();
-      const updated = shifts.find(s => s.id === shiftId);
-      if (updated) setSelectedShift({ ...updated, isSignedUp: true, slotsRemaining: updated.slotsRemaining - 1, signupCount: updated.signupCount + 1 });
-      else setSelectedShift(null);
+      setSelectedShift(null);
     } else {
       setMessage({ type: 'error', text: data.error || 'Failed to sign up' });
     }
@@ -77,12 +93,10 @@ export default function Calendar() {
     setTimeout(() => setMessage(null), 5000);
   }
 
-  // Build calendar grid data
+  // Build calendar grid
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const daysInPrevMonth = new Date(year, month, 0).getDate();
-  const today = new Date();
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
   const calendarDays = [];
   for (let i = firstDay - 1; i >= 0; i--) {
@@ -106,21 +120,6 @@ export default function Calendar() {
     return shifts.filter((s) => s.date === dateStr);
   }
 
-  // Mobile list: days in this month that have shifts, plus today if it has none
-  const mobileListDays = calendarDays
-    .filter(d => !d.otherMonth)
-    .map(d => ({ ...d, dayShifts: getShiftsForDate(d.date) }))
-    .filter(d => d.dayShifts.length > 0);
-
-  const formatMobileDate = (dateStr) => {
-    const d = new Date(dateStr + 'T00:00:00');
-    return {
-      weekday: SHORT_DAYS[d.getDay()],
-      month: MONTHS[d.getMonth()].slice(0, 3),
-      day: d.getDate(),
-    };
-  };
-
   const formatTime = (t) => {
     if (!t) return '';
     const [h, m] = t.split(':');
@@ -128,26 +127,39 @@ export default function Calendar() {
     return `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`;
   };
 
+  const formatSelectedDate = (dateStr) => {
+    if (!dateStr) return '';
+    const d = new Date(dateStr + 'T00:00:00');
+    return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  };
+
+  const selectedDayShifts = selectedDate ? getShiftsForDate(selectedDate) : [];
+
+  // Dot color for a date
+  function getDotColor(dateStr) {
+    const dayShifts = getShiftsForDate(dateStr);
+    if (dayShifts.length === 0) return null;
+    if (dayShifts.some(s => s.isSignedUp)) return 'blue';
+    if (dayShifts.some(s => s.slotsRemaining > 0)) return 'green';
+    return 'red';
+  }
+
   const Header = () => (
-    <div className="flex items-center justify-between mb-4">
-      <div className="flex items-center gap-2 sm:gap-3">
+    <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center gap-2">
         <h2 className="text-xl sm:text-2xl font-bold text-[#2d5016]">
           {MONTHS[month]} {year}
         </h2>
-        <button
-          onClick={goToToday}
-          className="text-xs bg-[#f0f7e6] text-[#2d5016] px-2.5 py-1 rounded-lg hover:bg-[#e0efd6] transition"
-        >
+        <button onClick={goToToday}
+          className="text-xs bg-[#f0f7e6] text-[#2d5016] px-2.5 py-1 rounded-lg hover:bg-[#e0efd6] transition">
           Today
         </button>
       </div>
       <div className="flex gap-2">
         <button onClick={prevMonth}
-          className="w-9 h-9 flex items-center justify-center rounded-lg bg-white border border-gray-200 hover:bg-gray-50 transition text-lg"
-        >‹</button>
+          className="w-9 h-9 flex items-center justify-center rounded-lg bg-white border border-gray-200 hover:bg-gray-50 transition text-lg">‹</button>
         <button onClick={nextMonth}
-          className="w-9 h-9 flex items-center justify-center rounded-lg bg-white border border-gray-200 hover:bg-gray-50 transition text-lg"
-        >›</button>
+          className="w-9 h-9 flex items-center justify-center rounded-lg bg-white border border-gray-200 hover:bg-gray-50 transition text-lg">›</button>
       </div>
     </div>
   );
@@ -164,88 +176,113 @@ export default function Calendar() {
 
       <Header />
 
-      {/* ── MOBILE LIST VIEW ── */}
+      {/* ── MOBILE VIEW: mini grid + day detail panel ── */}
       <div className="block sm:hidden">
-        {loading ? (
-          <p className="text-center text-gray-400 py-10">Loading shifts...</p>
-        ) : mobileListDays.length === 0 ? (
-          <div className="text-center py-12 text-gray-400">
-            <p className="text-4xl mb-3">📭</p>
-            <p className="font-medium">No shifts this month</p>
-            <p className="text-sm mt-1">Check back later or browse another month</p>
+        {/* Mini calendar grid */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-3">
+          {/* Day headers */}
+          <div className="grid grid-cols-7 border-b border-gray-100">
+            {['S','M','T','W','T','F','S'].map((d, i) => (
+              <div key={i} className="text-center py-2 text-xs font-medium text-gray-400">{d}</div>
+            ))}
           </div>
-        ) : (
-          <div className="space-y-2">
-            {mobileListDays.map((d) => {
-              const { weekday, month: mo, day } = formatMobileDate(d.date);
-              const isToday = d.date === todayStr;
-              return (
-                <div key={d.date}>
-                  {/* Date header */}
-                  <div className={`flex items-center gap-3 px-1 py-2 ${isToday ? 'text-[#2d5016]' : 'text-gray-500'}`}>
-                    <div className={`w-10 h-10 rounded-full flex flex-col items-center justify-center text-xs leading-tight flex-shrink-0 ${
-                      isToday ? 'bg-[#2d5016] text-white' : 'bg-gray-100'
-                    }`}>
-                      <span className="font-medium">{weekday.slice(0, 2)}</span>
-                      <span className="font-bold text-sm">{day}</span>
-                    </div>
-                    <span className="text-sm font-medium">{mo} {day}</span>
-                    {isToday && <span className="text-xs font-medium bg-[#f0f7e6] text-[#2d5016] px-2 py-0.5 rounded-full">Today</span>}
-                  </div>
 
-                  {/* Shifts for this day */}
-                  <div className="space-y-2 ml-1">
-                    {d.dayShifts.map((shift) => {
-                      const statusClass = shift.isSignedUp ? 'signed-up-card' : shift.slotsRemaining > 0 ? 'available-card' : 'full-card';
-                      return (
-                        <button
-                          key={shift.id}
-                          onClick={() => setSelectedShift(shift)}
-                          className={`w-full text-left rounded-xl p-3.5 border transition active:scale-[0.98] ${
-                            shift.isSignedUp
-                              ? 'bg-blue-50 border-blue-200'
-                              : shift.slotsRemaining > 0
-                              ? 'bg-green-50 border-green-200'
-                              : 'bg-red-50 border-red-200'
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <p className="font-semibold text-gray-900 truncate">{shift.title}</p>
-                              <p className="text-sm text-gray-500 mt-0.5">
-                                {formatTime(shift.startTime || shift.start_time)} – {formatTime(shift.endTime || shift.end_time)}
-                              </p>
-                              <p className="text-sm text-gray-500 truncate">{shift.location}</p>
-                            </div>
-                            <div className="flex-shrink-0 text-right">
-                              {shift.isSignedUp ? (
-                                <span className="text-xs font-medium text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">Signed up ✓</span>
-                              ) : shift.slotsRemaining > 0 ? (
-                                <span className="text-xs font-medium text-green-700">{shift.slotsRemaining} spot{shift.slotsRemaining !== 1 ? 's' : ''} left</span>
-                              ) : (
-                                <span className="text-xs font-medium text-red-600">Full</span>
-                              )}
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+          {/* Day cells */}
+          <div className="grid grid-cols-7">
+            {calendarDays.map((d, i) => {
+              const dot = !d.otherMonth ? getDotColor(d.date) : null;
+              const isSelected = d.date === selectedDate;
+              return (
+                <button
+                  key={i}
+                  onClick={() => !d.otherMonth && setSelectedDate(d.date)}
+                  disabled={d.otherMonth}
+                  className={`relative flex flex-col items-center justify-center py-1.5 transition ${
+                    d.otherMonth ? 'opacity-0 pointer-events-none' : 'active:bg-gray-50'
+                  }`}
+                >
+                  <span className={`w-8 h-8 flex items-center justify-center rounded-full text-sm font-medium transition ${
+                    isSelected
+                      ? 'bg-[#2d5016] text-white'
+                      : d.isToday
+                      ? 'border-2 border-[#2d5016] text-[#2d5016]'
+                      : 'text-gray-800'
+                  }`}>
+                    {d.day}
+                  </span>
+                  {/* Dot indicator */}
+                  <span className={`w-1.5 h-1.5 rounded-full mt-0.5 ${
+                    dot === 'green' ? 'bg-green-500' :
+                    dot === 'blue' ? 'bg-blue-500' :
+                    dot === 'red' ? 'bg-red-400' :
+                    'invisible'
+                  }`} />
+                </button>
               );
             })}
           </div>
-        )}
+        </div>
 
         {/* Legend */}
-        <div className="flex gap-4 mt-5 text-xs text-gray-500">
-          <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-green-50 border border-green-200"></span> Available</div>
-          <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-blue-50 border border-blue-200"></span> Signed up</div>
-          <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-50 border border-red-200"></span> Full</div>
+        <div className="flex gap-4 mb-3 text-xs text-gray-400 px-1">
+          <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500"></span> Available</div>
+          <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500"></span> Signed up</div>
+          <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400"></span> Full</div>
         </div>
+
+        {/* Day detail panel */}
+        {selectedDate && (
+          <div className="fade-in">
+            <p className="text-sm font-semibold text-gray-500 mb-2 px-1">{formatSelectedDate(selectedDate)}</p>
+            {selectedDayShifts.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-gray-100 p-5 text-center text-gray-400 text-sm">
+                No shifts on this day
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {selectedDayShifts.map((shift) => (
+                  <button
+                    key={shift.id}
+                    onClick={() => setSelectedShift(shift)}
+                    className={`w-full text-left rounded-xl p-4 border transition active:scale-[0.99] ${
+                      shift.isSignedUp
+                        ? 'bg-blue-50 border-blue-200'
+                        : shift.slotsRemaining > 0
+                        ? 'bg-green-50 border-green-200'
+                        : 'bg-red-50 border-red-200'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-gray-900">{shift.title}</p>
+                        <p className="text-sm text-gray-500 mt-0.5">
+                          {formatTime(shift.startTime || shift.start_time)} – {formatTime(shift.endTime || shift.end_time)}
+                        </p>
+                        <p className="text-sm text-gray-400 truncate">{shift.location}</p>
+                      </div>
+                      <div className="flex-shrink-0 text-right">
+                        {shift.isSignedUp ? (
+                          <span className="text-xs font-medium text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">Signed up ✓</span>
+                        ) : shift.slotsRemaining > 0 ? (
+                          <span className="text-xs font-medium text-green-700">{shift.slotsRemaining} spot{shift.slotsRemaining !== 1 ? 's' : ''} left</span>
+                        ) : (
+                          <span className="text-xs font-medium text-red-600">Full</span>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {loading && (
+          <p className="text-center text-gray-400 py-6 text-sm">Loading shifts...</p>
+        )}
       </div>
 
-      {/* ── DESKTOP GRID VIEW ── */}
+      {/* ── DESKTOP VIEW: full grid ── */}
       <div className="hidden sm:block">
         <div className="calendar-grid mb-0">
           {DAYS.map((day) => (
@@ -253,7 +290,6 @@ export default function Calendar() {
               {day}
             </div>
           ))}
-
           {calendarDays.map((d, i) => {
             const dayShifts = getShiftsForDate(d.date);
             return (
@@ -282,10 +318,6 @@ export default function Calendar() {
           <div className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-[#fee2e2] border border-[#fecaca]"></span> Full</div>
         </div>
       </div>
-
-      {loading && !shifts.length && (
-        <div className="hidden sm:block text-center text-gray-400 py-8">Loading shifts...</div>
-      )}
 
       {selectedShift && (
         <ShiftModal
