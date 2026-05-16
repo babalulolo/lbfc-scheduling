@@ -10,13 +10,19 @@
   --cream: #faf8f0;
 }
 
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
+  -webkit-overflow-scrolling: touch;
+}
+
 body {
   background-color: var(--cream);
   color: #1a1a1a;
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* ── Calendar grid (desktop) ── */
+/* ── Desktop calendar grid ── */
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
@@ -25,6 +31,9 @@ body {
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   overflow: hidden;
+  /* Never let this expand beyond its container on any screen */
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .calendar-day {
@@ -32,6 +41,8 @@ body {
   min-height: 110px;
   padding: 8px;
   position: relative;
+  min-width: 0; /* prevent grid blowout */
+  overflow: hidden;
 }
 
 .calendar-day.other-month {
@@ -44,8 +55,8 @@ body {
 }
 
 .shift-pill {
-  font-size: 12px;
-  padding: 3px 8px;
+  font-size: 11px;
+  padding: 3px 6px;
   border-radius: 6px;
   margin-top: 4px;
   cursor: pointer;
@@ -53,6 +64,8 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 100%;
+  display: block;
 }
 
 .shift-pill:hover {
@@ -84,12 +97,14 @@ body {
     inset: 0;
     display: flex;
     align-items: flex-end;
+    z-index: 50;
   }
   .modal-sheet-inner {
     width: 100%;
     border-radius: 20px 20px 0 0;
-    max-height: 90vh;
+    max-height: 85vh;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 }
 
@@ -101,6 +116,7 @@ body {
     align-items: center;
     justify-content: center;
     padding: 1rem;
+    z-index: 50;
   }
   .modal-sheet-inner {
     max-width: 28rem;
