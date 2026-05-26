@@ -70,6 +70,12 @@ async function initDb() {
       value TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS sessions (
+      token      TEXT PRIMARY KEY,
+      user_id    TEXT NOT NULL,
+      created_at BIGINT NOT NULL
+    );
+
     INSERT INTO settings (key, value)
     VALUES ('volunteer_code', 'LBFC-VOLUNTEER'),
            ('admin_code',     'LBFC-ADMIN')
@@ -415,5 +421,34 @@ export async function createInviteCode(inviteCode) {
       ]
     );
     return inviteCode;
+  });
+}
+
+
+// ─── Session functions ────────────────────────────────────────────────────────
+
+export async function createDbSession(token, userId) {
+  return withDb(async (db) => {
+    await db.query(
+      'INSERT INTO sessions (token, user_id, created_at) VALUES ($1, $2, $3) ON CONFLICT (token) DO NOTHING',
+      [token, userId, Date.now()]
+    );
+  });
+}
+
+export async function getDbSessionUser(token) {
+  return withDb(async (db) => {
+    const { rows } = await db.query(
+      'SELECT user_id FROM sessions WHERE token = $1 LIMIT 1',
+      [token]
+    );
+    if (!rows[0]) return null;
+    return findUserById(rows[0].user_id);
+  });
+}
+
+export async function deleteDbSession(token) {
+  return withDb(async (db) => {
+    await db.query('DELETE FROM sessions WHERE token = $1', [token]);
   });
 }
