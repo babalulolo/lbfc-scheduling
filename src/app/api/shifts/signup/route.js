@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getShiftById, getSignupsForShift, getSignupByUserAndShift, createSignup, deleteSignup } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { sendShiftConfirmation, sendCancellationNotice } from '@/lib/email';
+import { syncSignupToSheet } from '@/lib/sheets';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function POST(request) {
@@ -37,6 +38,9 @@ export async function POST(request) {
       userId: user.id,
       signedUpAt: new Date().toISOString(),
     });
+
+    // Sync to the volunteer spreadsheet (non-blocking, no-op until configured)
+    await syncSignupToSheet('add', shift, user);
 
     // Send confirmation emails (non-blocking)
     try {
@@ -80,6 +84,9 @@ export async function DELETE(request) {
     }
 
     await deleteSignup(user.id, shiftId);
+
+    // Remove from the volunteer spreadsheet (non-blocking, no-op until configured)
+    await syncSignupToSheet('remove', shift, user);
 
     try {
       await sendCancellationNotice(user, {

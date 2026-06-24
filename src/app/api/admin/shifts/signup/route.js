@@ -9,6 +9,7 @@ import {
 } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { sendShiftConfirmation } from '@/lib/email';
+import { syncSignupToSheet } from '@/lib/sheets';
 import { v4 as uuidv4 } from 'uuid';
 
 // Admin adds a volunteer to a shift
@@ -51,6 +52,9 @@ export async function POST(request) {
       signedUpAt: new Date().toISOString(),
     });
 
+    // Sync to the volunteer spreadsheet (non-blocking, no-op until configured)
+    await syncSignupToSheet('add', shift, volunteer);
+
     // Notify the volunteer they've been scheduled (non-blocking)
     try {
       await sendShiftConfirmation(volunteer, {
@@ -89,6 +93,11 @@ export async function DELETE(request) {
     }
 
     await deleteSignup(userId, shiftId);
+
+    // Remove from the volunteer spreadsheet (non-blocking, no-op until configured)
+    const shift = await getShiftById(shiftId);
+    const volunteer = await findUserById(userId);
+    await syncSignupToSheet('remove', shift, volunteer);
 
     return NextResponse.json({ success: true, message: 'Volunteer removed from shift' });
   } catch (error) {
