@@ -91,6 +91,7 @@ export default function AdminPage() {
         {tab === 'shifts' && (
           <ShiftsTab
             shifts={shifts}
+            volunteers={volunteers}
             showNewShift={showNewShift}
             setShowNewShift={setShowNewShift}
             editingShift={editingShift}
@@ -106,7 +107,7 @@ export default function AdminPage() {
   );
 }
 
-function ShiftsTab({ shifts, showNewShift, setShowNewShift, editingShift, setEditingShift, onRefresh, flash }) {
+function ShiftsTab({ shifts, volunteers, showNewShift, setShowNewShift, editingShift, setEditingShift, onRefresh, flash }) {
   const [form, setForm] = useState({
     title: '', description: '', date: '', startTime: '', endTime: '',
     location: '', locationAddress: '', notes: '', slotsTotal: 5,
@@ -262,11 +263,6 @@ function ShiftsTab({ shifts, showNewShift, setShowNewShift, editingShift, setEdi
                     {formatTime(shift.startTime || shift.start_time)} – {formatTime(shift.endTime || shift.end_time)}
                   </p>
                   <p className="text-sm text-gray-400">{shift.location}</p>
-                  {shift.signups && shift.signups.length > 0 && (
-                    <p className="text-xs text-gray-400 mt-1">
-                      Volunteers: {shift.signups.map(s => s.name).join(', ')}
-                    </p>
-                  )}
                 </div>
                 <div className="flex gap-2 flex-shrink-0">
                   <button onClick={() => setEditingShift(shift)}
@@ -279,10 +275,93 @@ function ShiftsTab({ shifts, showNewShift, setShowNewShift, editingShift, setEdi
                   </button>
                 </div>
               </div>
+
+              <ManageVolunteers shift={shift} volunteers={volunteers} onRefresh={onRefresh} flash={flash} />
             </div>
           ))
         )}
       </div>
+    </div>
+  );
+}
+
+function ManageVolunteers({ shift, volunteers, onRefresh, flash }) {
+  const [selected, setSelected] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const signups = shift.signups || [];
+  const slotsTotal = shift.slotsTotal || shift.slots_total;
+  const signedUpIds = new Set(signups.map((s) => s.userId));
+  const available = (volunteers || []).filter((v) => !signedUpIds.has(v.id));
+  const isFull = signups.length >= slotsTotal;
+
+  async function addVolunteer() {
+    if (!selected) return;
+    setBusy(true);
+    const res = await fetch('/api/admin/shifts/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shiftId: shift.id, userId: selected }),
+    });
+    const data = await res.json();
+    if (res.ok) { flash('success', data.message || 'Volunteer added'); setSelected(''); onRefresh(); }
+    else { flash('error', data.error || 'Failed to add volunteer'); }
+    setBusy(false);
+  }
+
+  async function removeVolunteer(userId) {
+    setBusy(true);
+    const res = await fetch('/api/admin/shifts/signup', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shiftId: shift.id, userId }),
+    });
+    const data = await res.json();
+    if (res.ok) { flash('success', data.message || 'Volunteer removed'); onRefresh(); }
+    else { flash('error', data.error || 'Failed to remove volunteer'); }
+    setBusy(false);
+  }
+
+  return (
+    <div className="mt-3 pt-3 border-t border-gray-100">
+      <p className="text-xs font-medium text-gray-500 mb-2">Volunteers ({signups.length}/{slotsTotal})</p>
+
+      {signups.length > 0 ? (
+        <div className="flex flex-wrap gap-2 mb-3">
+          {signups.map((s) => (
+            <span key={s.userId} className="inline-flex items-center gap-1.5 text-xs bg-[#f0f7e6] text-[#2d5016] pl-2.5 pr-1.5 py-1 rounded-full">
+              {s.name}
+              <button onClick={() => removeVolunteer(s.userId)} disabled={busy}
+                className="w-4 h-4 flex items-center justify-center rounded-full hover:bg-[#2d5016] hover:text-white transition text-sm leading-none disabled:opacity-40"
+                title={`Remove ${s.name}`} aria-label={`Remove ${s.name}`}>
+                &times;
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-gray-400 mb-3">No volunteers signed up yet.</p>
+      )}
+
+      {isFull ? (
+        <p className="text-xs text-gray-400">This shift is full. Remove someone or add slots to add more.</p>
+      ) : available.length === 0 ? (
+        <p className="text-xs text-gray-400">All volunteers are already on this shift.</p>
+      ) : (
+        <div className="flex gap-2">
+          <select value={selected} onChange={(e) => setSelected(e.target.value)}
+            className="flex-1 min-w-0 px-3 py-1.5 rounded-lg border border-gray-200 text-sm focus:border-[#2d5016] focus:ring-1 focus:ring-[#2d5016] outline-none">
+            <option value="">Add a volunteer…</option>
+            {available.map((v) => (
+              <option key={v.id} value={v.id}>{v.name}{v.role === 'admin' ? ' (admin)' : ''}</option>
+            ))}
+          </select>
+          <button onClick={addVolunteer} disabled={!selected || busy}
+            className="px-4 py-1.5 rounded-lg bg-[#2d5016] text-white text-sm font-medium hover:bg-[#1a3a0a] transition disabled:opacity-40 whitespace-nowrap">
+            Add
+          </button>
+        </div>
+      )}
     </div>
   );
 }

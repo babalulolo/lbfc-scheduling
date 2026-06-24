@@ -1,5 +1,10 @@
 import { cookies } from 'next/headers';
-import { findUserById, readDb, writeDb } from './db';
+import {
+  findUserById,
+  createSessionRecord,
+  getSessionUserId,
+  deleteSessionRecord,
+} from './db';
 import crypto from 'crypto';
 
 const SESSION_COOKIE = 'lbfc_session';
@@ -10,10 +15,7 @@ export function createSessionToken() {
 
 export async function createSession(userId) {
   const token = createSessionToken();
-  const db = readDb();
-  if (!db.sessions) db.sessions = [];
-  db.sessions.push({ token, userId, createdAt: Date.now() });
-  writeDb(db);
+  await createSessionRecord(token, userId);
   return token;
 }
 
@@ -22,12 +24,10 @@ export async function getSession() {
   const token = cookieStore.get(SESSION_COOKIE)?.value;
   if (!token) return null;
 
-  const db = readDb();
-  const sessions = db.sessions || [];
-  const session = sessions.find((s) => s.token === token);
-  if (!session) return null;
+  const userId = await getSessionUserId(token);
+  if (!userId) return null;
 
-  const user = findUserById(session.userId);
+  const user = await findUserById(userId);
   if (!user) return null;
 
   return {
@@ -54,9 +54,7 @@ export async function clearSession() {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE)?.value;
   if (token) {
-    const db = readDb();
-    db.sessions = (db.sessions || []).filter((s) => s.token !== token);
-    writeDb(db);
+    await deleteSessionRecord(token);
   }
   cookieStore.delete(SESSION_COOKIE);
 }

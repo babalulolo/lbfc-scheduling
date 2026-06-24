@@ -15,31 +15,37 @@ export async function GET(request) {
 
     let shifts;
     if (date) {
-      shifts = getShifts({ date });
+      shifts = await getShifts({ date });
     } else if (month) {
-      shifts = getShifts({ month });
+      shifts = await getShifts({ month });
     } else {
-      shifts = getShifts({ fromToday: true });
+      shifts = await getShifts({ fromToday: true });
     }
 
-    const enrichedShifts = shifts.map((shift) => {
-      const signups = getSignupsForShift(shift.id);
-      const signupDetails = signups.map((s) => {
-        const u = findUserById(s.userId);
-        return u ? { name: u.name, email: u.email, phone: u.phone, userId: u.id } : null;
-      }).filter(Boolean);
+    const enrichedShifts = await Promise.all(
+      shifts.map(async (shift) => {
+        const signups = await getSignupsForShift(shift.id);
+        const signupDetails = (
+          await Promise.all(
+            signups.map(async (s) => {
+              const u = await findUserById(s.userId);
+              return u ? { name: u.name, email: u.email, phone: u.phone, userId: u.id } : null;
+            })
+          )
+        ).filter(Boolean);
 
-      const isSignedUp = signups.some((s) => s.userId === user.id);
-      const slotsRemaining = shift.slotsTotal - signups.length;
+        const isSignedUp = signups.some((s) => s.userId === user.id);
+        const slotsRemaining = shift.slotsTotal - signups.length;
 
-      return {
-        ...shift,
-        signups: user.role === 'admin' ? signupDetails : signupDetails.map(s => ({ name: s.name })),
-        signupCount: signups.length,
-        slotsRemaining,
-        isSignedUp,
-      };
-    });
+        return {
+          ...shift,
+          signups: user.role === 'admin' ? signupDetails : signupDetails.map((s) => ({ name: s.name })),
+          signupCount: signups.length,
+          slotsRemaining,
+          isSignedUp,
+        };
+      })
+    );
 
     return NextResponse.json({ shifts: enrichedShifts });
   } catch (error) {

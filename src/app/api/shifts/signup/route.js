@@ -16,22 +16,22 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Shift ID is required' }, { status: 400 });
     }
 
-    const shift = getShiftById(shiftId);
+    const shift = await getShiftById(shiftId);
     if (!shift) {
       return NextResponse.json({ error: 'Shift not found' }, { status: 404 });
     }
 
-    const existing = getSignupByUserAndShift(user.id, shiftId);
+    const existing = await getSignupByUserAndShift(user.id, shiftId);
     if (existing) {
       return NextResponse.json({ error: 'You are already signed up for this shift' }, { status: 400 });
     }
 
-    const signups = getSignupsForShift(shiftId);
+    const signups = await getSignupsForShift(shiftId);
     if (signups.length >= shift.slotsTotal) {
       return NextResponse.json({ error: 'This shift is full' }, { status: 400 });
     }
 
-    createSignup({
+    await createSignup({
       id: uuidv4(),
       shiftId,
       userId: user.id,
@@ -69,17 +69,17 @@ export async function DELETE(request) {
       return NextResponse.json({ error: 'Shift ID is required' }, { status: 400 });
     }
 
-    const shift = getShiftById(shiftId);
+    const shift = await getShiftById(shiftId);
     if (!shift) {
       return NextResponse.json({ error: 'Shift not found' }, { status: 404 });
     }
 
-    const signup = getSignupByUserAndShift(user.id, shiftId);
+    const signup = await getSignupByUserAndShift(user.id, shiftId);
     if (!signup) {
       return NextResponse.json({ error: 'You are not signed up for this shift' }, { status: 400 });
     }
 
-    deleteSignup(user.id, shiftId);
+    await deleteSignup(user.id, shiftId);
 
     try {
       await sendCancellationNotice(user, {
