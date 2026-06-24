@@ -32,7 +32,8 @@ export async function PUT(request) {
     if (admin) updates.admin = admin.toUpperCase().trim();
 
     await setAccessCodes(updates);
-    return NextResponse.json({ success: true, codes: await getAccessCodes() });
+    const codes = await getAccessCodes();
+    return NextResponse.json({ success: true, codes });
   } catch (error) {
     console.error('Update access codes error:', error);
     return NextResponse.json({ error: 'Something went wrong' }, { status: 500 });

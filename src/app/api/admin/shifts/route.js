@@ -10,29 +10,45 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    const { title, description, date, startTime, endTime, location, locationAddress, notes, slotsTotal } = await request.json();
+    const {
+      title, description, date, dates,
+      startTime, endTime, location, locationAddress, notes, slotsTotal,
+    } = await request.json();
 
-    if (!title || !date || !startTime || !endTime || !location) {
-      return NextResponse.json({ error: 'Title, date, start time, end time, and location are required' }, { status: 400 });
+    // Support single date OR an array of dates (for recurring shifts)
+    const shiftDates = dates && dates.length > 0 ? dates : (date ? [date] : []);
+
+    if (!title || shiftDates.length === 0 || !startTime || !location) {
+      return NextResponse.json(
+        { error: 'Title, date, start time, and location are required' },
+        { status: 400 }
+      );
     }
 
-    const id = uuidv4();
-    const shift = await createShift({
-      id,
-      title,
-      description: description || null,
-      date,
-      startTime,
-      endTime,
-      location,
-      locationAddress: locationAddress || null,
-      notes: notes || null,
-      slotsTotal: slotsTotal || 5,
-      createdBy: user.id,
-      createdAt: new Date().toISOString(),
-    });
+    // Link recurring shifts with a shared group ID
+    const groupId = shiftDates.length > 1 ? uuidv4() : null;
 
-    return NextResponse.json({ success: true, shift });
+    const created = await Promise.all(
+      shiftDates.map((d) =>
+        createShift({
+          id: uuidv4(),
+          title,
+          description: description || null,
+          date: d,
+          startTime,
+          endTime: endTime || null,
+          location,
+          locationAddress: locationAddress || null,
+          notes: notes || null,
+          slotsTotal: slotsTotal || 5,
+          recurrenceGroupId: groupId,
+          createdBy: user.id,
+          createdAt: new Date().toISOString(),
+        })
+      )
+    );
+
+    return NextResponse.json({ success: true, shifts: created, count: created.length });
   } catch (error) {
     console.error('Create shift error:', error);
     return NextResponse.json({ error: 'Something went wrong' }, { status: 500 });
@@ -46,7 +62,10 @@ export async function PUT(request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    const { id, title, description, date, startTime, endTime, location, locationAddress, notes, slotsTotal } = await request.json();
+    const {
+      id, title, description, date, startTime, endTime,
+      location, locationAddress, notes, slotsTotal,
+    } = await request.json();
 
     if (!id) {
       return NextResponse.json({ error: 'Shift ID is required' }, { status: 400 });

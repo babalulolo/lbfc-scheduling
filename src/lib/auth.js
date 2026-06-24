@@ -1,10 +1,5 @@
 import { cookies } from 'next/headers';
-import {
-  findUserById,
-  createSessionRecord,
-  getSessionUserId,
-  deleteSessionRecord,
-} from './db';
+import { createDbSession, getDbSessionUser, deleteDbSession } from './db';
 import crypto from 'crypto';
 
 const SESSION_COOKIE = 'lbfc_session';
@@ -15,7 +10,7 @@ export function createSessionToken() {
 
 export async function createSession(userId) {
   const token = createSessionToken();
-  await createSessionRecord(token, userId);
+  await createDbSession(token, userId);
   return token;
 }
 
@@ -24,10 +19,7 @@ export async function getSession() {
   const token = cookieStore.get(SESSION_COOKIE)?.value;
   if (!token) return null;
 
-  const userId = await getSessionUserId(token);
-  if (!userId) return null;
-
-  const user = await findUserById(userId);
+  const user = await getDbSessionUser(token);
   if (!user) return null;
 
   return {
@@ -54,7 +46,7 @@ export async function clearSession() {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE)?.value;
   if (token) {
-    await deleteSessionRecord(token);
+    await deleteDbSession(token);
   }
   cookieStore.delete(SESSION_COOKIE);
 }

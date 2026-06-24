@@ -1,21 +1,17 @@
 import { Pool } from 'pg';
 
 // ─── Connection pool ──────────────────────────────────────────────────────────
-// Railway injects DATABASE_URL automatically when services share a project.
-// The internal URL (postgres.railway.internal) only works inside Railway's
-// private network, so we also fall back to DATABASE_PUBLIC_URL for local dev.
 const connectionString =
   process.env.DATABASE_URL || process.env.DATABASE_PUBLIC_URL;
 
 const pool = new Pool({
   connectionString,
   ssl: connectionString && connectionString.includes('railway.internal')
-    ? false                          // private network — no SSL needed
-    : { rejectUnauthorized: false }, // public/external — require SSL
+    ? false
+    : { rejectUnauthorized: false },
 });
 
 // ─── Schema bootstrap ─────────────────────────────────────────────────────────
-// Runs once on first import. Idempotent — safe to call on every cold start.
 let initialized = false;
 
 async function initDb() {
@@ -24,36 +20,37 @@ async function initDb() {
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
-      id               TEXT PRIMARY KEY,
-      email            TEXT UNIQUE NOT NULL,
-      name             TEXT NOT NULL,
-      phone            TEXT,
-      password_hash    TEXT NOT NULL,
-      role             TEXT NOT NULL DEFAULT 'volunteer',
+      id                      TEXT PRIMARY KEY,
+      email                   TEXT UNIQUE NOT NULL,
+      name                    TEXT NOT NULL,
+      phone                   TEXT,
+      password_hash           TEXT NOT NULL,
+      role                    TEXT NOT NULL DEFAULT 'volunteer',
       emergency_contact_name  TEXT,
       emergency_contact_phone TEXT,
-      created_at       TEXT NOT NULL
+      created_at              TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS shifts (
-      id               TEXT PRIMARY KEY,
-      title            TEXT NOT NULL,
-      description      TEXT,
-      date             TEXT NOT NULL,
-      start_time       TEXT NOT NULL,
-      end_time         TEXT,
-      location         TEXT,
-      location_address TEXT,
-      notes            TEXT,
-      slots_total      INTEGER NOT NULL DEFAULT 1,
-      created_by       TEXT,
-      created_at       TEXT NOT NULL
+      id                   TEXT PRIMARY KEY,
+      title                TEXT NOT NULL,
+      description          TEXT,
+      date                 TEXT NOT NULL,
+      start_time           TEXT NOT NULL,
+      end_time             TEXT,
+      location             TEXT,
+      location_address     TEXT,
+      notes                TEXT,
+      slots_total          INTEGER NOT NULL DEFAULT 1,
+      recurrence_group_id  TEXT,
+      created_by           TEXT,
+      created_at           TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS shift_signups (
-      id         TEXT PRIMARY KEY,
-      shift_id   TEXT NOT NULL REFERENCES shifts(id) ON DELETE CASCADE,
-      user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      id           TEXT PRIMARY KEY,
+      shift_id     TEXT NOT NULL REFERENCES shifts(id) ON DELETE CASCADE,
+      user_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       signed_up_at TEXT NOT NULL,
       UNIQUE(shift_id, user_id)
     );
@@ -75,19 +72,22 @@ async function initDb() {
 
     CREATE TABLE IF NOT EXISTS sessions (
       token      TEXT PRIMARY KEY,
-      user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      created_at TEXT NOT NULL
+      user_id    TEXT NOT NULL,
+      created_at BIGINT NOT NULL
     );
 
-    -- Default access codes (only inserted if not already present)
     INSERT INTO settings (key, value)
     VALUES ('volunteer_code', 'LBFC-VOLUNTEER'),
            ('admin_code',     'LBFC-ADMIN')
     ON CONFLICT (key) DO NOTHING;
   `);
+
+  // Migrate existing shifts table if recurrence_group_id column is missing
+  await pool.query(`
+    ALTER TABLE shifts ADD COLUMN IF NOT EXISTS recurrence_group_id TEXT;
+  `);
 }
 
-// Ensure tables exist before every exported function call
 async function withDb(fn) {
   await initDb();
   return fn(pool);
@@ -123,6 +123,7 @@ function rowToShift(row) {
     locationAddress: row.location_address,
     notes: row.notes,
     slotsTotal: row.slots_total,
+    recurrenceGroupId: row.recurrence_group_id || null,
     createdBy: row.created_by,
     createdAt: row.created_at,
   };
@@ -135,19 +136,6 @@ function rowToSignup(row) {
     shiftId: row.shift_id,
     userId: row.user_id,
     signedUpAt: row.signed_up_at,
-  };
-}
-
-function rowToInviteCode(row) {
-  if (!row) return null;
-  return {
-    id: row.id,
-    code: row.code,
-    role: row.role,
-    createdBy: row.created_by,
-    createdAt: row.created_at,
-    usedBy: row.used_by,
-    usedAt: row.used_at,
   };
 }
 
@@ -230,7 +218,6 @@ export async function getShifts(filter = {}) {
     }
 
     query += ' ORDER BY date ASC, start_time ASC';
-
     const { rows } = await db.query(query, params);
     return rows.map(rowToShift);
   });
@@ -251,8 +238,9 @@ export async function createShift(shift) {
     await db.query(
       `INSERT INTO shifts
          (id, title, description, date, start_time, end_time,
-          location, location_address, notes, slots_total, created_by, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+          location, location_address, notes, slots_total,
+          recurrence_group_id, created_by, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
       [
         shift.id,
         shift.title,
@@ -264,6 +252,7 @@ export async function createShift(shift) {
         shift.locationAddress || null,
         shift.notes || null,
         shift.slotsTotal || 1,
+        shift.recurrenceGroupId || null,
         shift.createdBy || null,
         shift.createdAt || new Date().toISOString(),
       ]
@@ -309,8 +298,17 @@ export async function updateShift(id, updates) {
 
 export async function deleteShift(id) {
   return withDb(async (db) => {
-    // shift_signups are cascade-deleted via FK
     await db.query('DELETE FROM shifts WHERE id = $1', [id]);
+  });
+}
+
+export async function deleteShiftsByRecurrenceGroup(groupId) {
+  return withDb(async (db) => {
+    const { rowCount } = await db.query(
+      'DELETE FROM shifts WHERE recurrence_group_id = $1',
+      [groupId]
+    );
+    return rowCount;
   });
 }
 
@@ -364,10 +362,7 @@ export async function deleteSignup(userId, shiftId) {
 
 // ─── Access codes ─────────────────────────────────────────────────────────────
 
-const DEFAULT_CODES = {
-  volunteer: 'LBFC-VOLUNTEER',
-  admin: 'LBFC-ADMIN',
-};
+const DEFAULT_CODES = { volunteer: 'LBFC-VOLUNTEER', admin: 'LBFC-ADMIN' };
 
 export async function getAccessCodes() {
   return withDb(async (db) => {
@@ -387,13 +382,13 @@ export async function setAccessCodes(updates) {
   return withDb(async (db) => {
     if (updates.volunteer !== undefined) {
       await db.query(
-        "INSERT INTO settings (key, value) VALUES ('volunteer_code', $1) ON CONFLICT (key) DO UPDATE SET value = $1",
+        "INSERT INTO settings (key,value) VALUES ('volunteer_code',$1) ON CONFLICT (key) DO UPDATE SET value=$1",
         [updates.volunteer]
       );
     }
     if (updates.admin !== undefined) {
       await db.query(
-        "INSERT INTO settings (key, value) VALUES ('admin_code', $1) ON CONFLICT (key) DO UPDATE SET value = $1",
+        "INSERT INTO settings (key,value) VALUES ('admin_code',$1) ON CONFLICT (key) DO UPDATE SET value=$1",
         [updates.admin]
       );
     }
@@ -414,7 +409,7 @@ export async function createInviteCode(inviteCode) {
   return withDb(async (db) => {
     await db.query(
       `INSERT INTO invite_codes (id, code, role, created_by, created_at, used_by, used_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
       [
         inviteCode.id,
         inviteCode.code,
@@ -429,29 +424,30 @@ export async function createInviteCode(inviteCode) {
   });
 }
 
-// ─── Sessions ─────────────────────────────────────────────────────────────────
 
-export async function createSessionRecord(token, userId) {
+// ─── Session functions ────────────────────────────────────────────────────────
+
+export async function createDbSession(token, userId) {
   return withDb(async (db) => {
     await db.query(
-      'INSERT INTO sessions (token, user_id, created_at) VALUES ($1, $2, $3)',
-      [token, userId, new Date().toISOString()]
+      'INSERT INTO sessions (token, user_id, created_at) VALUES ($1, $2, $3) ON CONFLICT (token) DO NOTHING',
+      [token, userId, Date.now()]
     );
-    return token;
   });
 }
 
-export async function getSessionUserId(token) {
+export async function getDbSessionUser(token) {
   return withDb(async (db) => {
     const { rows } = await db.query(
       'SELECT user_id FROM sessions WHERE token = $1 LIMIT 1',
       [token]
     );
-    return rows[0]?.user_id || null;
+    if (!rows[0]) return null;
+    return findUserById(rows[0].user_id);
   });
 }
 
-export async function deleteSessionRecord(token) {
+export async function deleteDbSession(token) {
   return withDb(async (db) => {
     await db.query('DELETE FROM sessions WHERE token = $1', [token]);
   });

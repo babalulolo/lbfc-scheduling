@@ -38,6 +38,7 @@ export async function POST(request) {
       await createInviteCode({
         id: codeId,
         code,
+        role: 'volunteer',
         createdBy: id,
         usedBy: null,
         usedAt: null,
