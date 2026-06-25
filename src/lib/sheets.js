@@ -41,6 +41,13 @@ async function postToSheet(payload) {
   }
 }
 
+function hoursBetween(startIso, endIso) {
+  if (!startIso || !endIso) return '';
+  const ms = new Date(endIso).getTime() - new Date(startIso).getTime();
+  if (!Number.isFinite(ms) || ms <= 0) return '';
+  return Math.round((ms / 3600000) * 100) / 100;
+}
+
 /**
  * Sync one signup to the spreadsheet.
  * @param {'add'|'remove'} action
@@ -64,5 +71,28 @@ export async function syncSignupToSheet(action, shift, volunteer) {
     volunteerEmail: volunteer.email || '',
     eventDescription: shift.description || '',
     location: shift.location || shift.locationAddress || shift.location_address || '',
+  });
+}
+
+/**
+ * Sync clock-in/out (actual attendance hours) to the spreadsheet.
+ * The Apps Script will handle the 'clock' action once the Attendance tab
+ * mapping is wired up; until then this is a harmless no-op.
+ * @param {object} shift
+ * @param {object} volunteer ({ id, name, email })
+ * @param {object} signup    ({ clockInAt, clockOutAt })
+ */
+export async function syncClockToSheet(shift, volunteer, signup) {
+  if (!shift || !volunteer || !signup) return;
+  await postToSheet({
+    action: 'clock',
+    signupKey: `${shift.id}__${volunteer.id}`,
+    date: shift.date || '',
+    event: shift.title || '',
+    volunteerName: volunteer.name || '',
+    volunteerEmail: volunteer.email || '',
+    clockInAt: signup.clockInAt || '',
+    clockOutAt: signup.clockOutAt || '',
+    actualHours: hoursBetween(signup.clockInAt, signup.clockOutAt),
   });
 }

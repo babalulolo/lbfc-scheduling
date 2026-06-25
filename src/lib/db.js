@@ -86,6 +86,12 @@ async function initDb() {
   await pool.query(`
     ALTER TABLE shifts ADD COLUMN IF NOT EXISTS recurrence_group_id TEXT;
   `);
+
+  // Migrate shift_signups for clock in/out tracking
+  await pool.query(`
+    ALTER TABLE shift_signups ADD COLUMN IF NOT EXISTS clock_in_at  TEXT;
+    ALTER TABLE shift_signups ADD COLUMN IF NOT EXISTS clock_out_at TEXT;
+  `);
 }
 
 async function withDb(fn) {
@@ -136,6 +142,8 @@ function rowToSignup(row) {
     shiftId: row.shift_id,
     userId: row.user_id,
     signedUpAt: row.signed_up_at,
+    clockInAt: row.clock_in_at || null,
+    clockOutAt: row.clock_out_at || null,
   };
 }
 
@@ -357,6 +365,43 @@ export async function deleteSignup(userId, shiftId) {
       'DELETE FROM shift_signups WHERE user_id = $1 AND shift_id = $2',
       [userId, shiftId]
     );
+  });
+}
+
+// ─── Clock in / out ───────────────────────────────────────────────────────────
+
+export async function setClockIn(userId, shiftId, timestamp) {
+  return withDb(async (db) => {
+    await db.query(
+      `UPDATE shift_signups SET clock_in_at = $1
+       WHERE user_id = $2 AND shift_id = $3`,
+      [timestamp, userId, shiftId]
+    );
+    return getSignupByUserAndShift(userId, shiftId);
+  });
+}
+
+export async function setClockOut(userId, shiftId, timestamp) {
+  return withDb(async (db) => {
+    await db.query(
+      `UPDATE shift_signups SET clock_out_at = $1
+       WHERE user_id = $2 AND shift_id = $3`,
+      [timestamp, userId, shiftId]
+    );
+    return getSignupByUserAndShift(userId, shiftId);
+  });
+}
+
+// Admin override — set either/both timestamps directly (null clears a value)
+export async function setClockTimes(userId, shiftId, { clockInAt, clockOutAt }) {
+  return withDb(async (db) => {
+    await db.query(
+      `UPDATE shift_signups
+         SET clock_in_at = $1, clock_out_at = $2
+       WHERE user_id = $3 AND shift_id = $4`,
+      [clockInAt ?? null, clockOutAt ?? null, userId, shiftId]
+    );
+    return getSignupByUserAndShift(userId, shiftId);
   });
 }
 

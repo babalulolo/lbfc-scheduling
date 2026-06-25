@@ -534,6 +534,115 @@ function ShiftsTab({ shifts, volunteers, showNewShift, setShowNewShift, editingS
   );
 }
 
+// ─── Clock-time helpers ───────────────────────────────────────────────────────
+
+function fmtClock(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
+function clockHours(inIso, outIso) {
+  if (!inIso || !outIso) return null;
+  const ms = new Date(outIso) - new Date(inIso);
+  return ms > 0 ? Math.round((ms / 3600000) * 10) / 10 : null;
+}
+
+// ISO → value for a <input type="datetime-local"> (browser-local time)
+function isoToInput(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
+// datetime-local value (browser-local) → ISO string
+function inputToIso(val) {
+  if (!val) return null;
+  const d = new Date(val);
+  return isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+function ClockRow({ shift, signup, onRemove, onRefresh, flash, busy }) {
+  const [editing, setEditing] = useState(false);
+  const [inVal, setInVal] = useState(isoToInput(signup.clockInAt));
+  const [outVal, setOutVal] = useState(isoToInput(signup.clockOutAt));
+  const [saving, setSaving] = useState(false);
+
+  const hrs = clockHours(signup.clockInAt, signup.clockOutAt);
+  let status;
+  if (signup.clockOutAt) {
+    status = `${hrs != null ? hrs + ' hrs' : 'done'} · ${fmtClock(signup.clockInAt)}–${fmtClock(signup.clockOutAt)}`;
+  } else if (signup.clockInAt) {
+    status = `Clocked in ${fmtClock(signup.clockInAt)} · still open`;
+  } else {
+    status = 'Not clocked in';
+  }
+
+  async function save() {
+    setSaving(true);
+    const res = await fetch('/api/admin/shifts/clock', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        shiftId: shift.id,
+        userId: signup.userId,
+        clockInAt: inputToIso(inVal),
+        clockOutAt: inputToIso(outVal),
+      }),
+    });
+    const data = await res.json();
+    if (res.ok) { flash('success', 'Hours updated'); setEditing(false); onRefresh(); }
+    else { flash('error', data.error || 'Failed to update hours'); }
+    setSaving(false);
+  }
+
+  return (
+    <div className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-gray-800 truncate">{signup.name}</p>
+          <p className="text-xs text-gray-400">{status}</p>
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <button onClick={() => setEditing(!editing)}
+            className="text-xs px-2 py-1 rounded-md border border-gray-200 hover:bg-white transition">
+            {editing ? 'Close' : 'Edit hours'}
+          </button>
+          <button onClick={() => onRemove(signup.userId)} disabled={busy}
+            className="text-xs px-2 py-1 rounded-md border border-red-200 text-red-500 hover:bg-red-50 transition disabled:opacity-40"
+            title={`Remove ${signup.name}`}>
+            Remove
+          </button>
+        </div>
+      </div>
+
+      {editing && (
+        <div className="mt-2 flex flex-wrap items-end gap-2">
+          <label className="text-xs text-gray-500">
+            Clock in
+            <input type="datetime-local" value={inVal} onChange={(e) => setInVal(e.target.value)}
+              className="block mt-0.5 px-2 py-1 rounded-md border border-gray-200 text-xs" />
+          </label>
+          <label className="text-xs text-gray-500">
+            Clock out
+            <input type="datetime-local" value={outVal} onChange={(e) => setOutVal(e.target.value)}
+              className="block mt-0.5 px-2 py-1 rounded-md border border-gray-200 text-xs" />
+          </label>
+          <button onClick={save} disabled={saving}
+            className="px-3 py-1.5 rounded-md bg-[#2d5016] text-white text-xs font-medium hover:bg-[#1a3a0a] transition disabled:opacity-40">
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+          <button type="button" onClick={() => { setInVal(''); setOutVal(''); }}
+            className="px-2 py-1.5 rounded-md border border-gray-200 text-xs text-gray-500 hover:bg-white transition">
+            Clear
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Per-shift volunteer management ───────────────────────────────────────────
 
 function ManageVolunteers({ shift, volunteers, onRefresh, flash }) {
@@ -578,16 +687,10 @@ function ManageVolunteers({ shift, volunteers, onRefresh, flash }) {
       <p className="text-xs font-medium text-gray-500 mb-2">Volunteers ({signups.length}/{slotsTotal})</p>
 
       {signups.length > 0 ? (
-        <div className="flex flex-wrap gap-2 mb-3">
+        <div className="space-y-2 mb-3">
           {signups.map((s) => (
-            <span key={s.userId} className="inline-flex items-center gap-1.5 text-xs bg-[#f0f7e6] text-[#2d5016] pl-2.5 pr-1.5 py-1 rounded-full">
-              {s.name}
-              <button onClick={() => removeVolunteer(s.userId)} disabled={busy}
-                className="w-4 h-4 flex items-center justify-center rounded-full hover:bg-[#2d5016] hover:text-white transition text-sm leading-none disabled:opacity-40"
-                title={`Remove ${s.name}`} aria-label={`Remove ${s.name}`}>
-                &times;
-              </button>
-            </span>
+            <ClockRow key={s.userId} shift={shift} signup={s}
+              onRemove={removeVolunteer} onRefresh={onRefresh} flash={flash} busy={busy} />
           ))}
         </div>
       ) : (

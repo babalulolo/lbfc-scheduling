@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 
-export default function ShiftModal({ shift, onClose, onSignup, onCancel }) {
+export default function ShiftModal({ shift, onClose, onSignup, onCancel, onClock }) {
   const [loading, setLoading] = useState(false);
+  const [clockLoading, setClockLoading] = useState(false);
 
   if (!shift) return null;
 
@@ -45,6 +46,35 @@ export default function ShiftModal({ shift, onClose, onSignup, onCancel }) {
       }
     } finally {
       setLoading(false);
+    }
+  }
+
+  // ── Clock in/out state ──
+  const todayLA = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+  const isShiftToday = shift.date === todayLA;
+  const clockedIn = !!shift.myClockInAt;
+  const clockedOut = !!shift.myClockOutAt;
+
+  const formatClock = (iso) => {
+    if (!iso) return '';
+    return new Date(iso).toLocaleTimeString('en-US', {
+      hour: 'numeric', minute: '2-digit', timeZone: 'America/Los_Angeles',
+    });
+  };
+
+  const clockedHours = (() => {
+    if (!shift.myClockInAt || !shift.myClockOutAt) return null;
+    const ms = new Date(shift.myClockOutAt) - new Date(shift.myClockInAt);
+    return ms > 0 ? Math.round((ms / 3600000) * 10) / 10 : null;
+  })();
+
+  async function handleClock(action) {
+    if (!onClock) return;
+    setClockLoading(true);
+    try {
+      await onClock(shift.id, action);
+    } finally {
+      setClockLoading(false);
     }
   }
 
@@ -122,6 +152,40 @@ export default function ShiftModal({ shift, onClose, onSignup, onCancel }) {
               </div>
             )}
           </div>
+
+          {shift.isSignedUp && (
+            <div className="mb-5 rounded-xl border border-[#e0efd6] bg-[#f7fbf2] p-4">
+              <p className="text-sm font-semibold text-[#2d5016] mb-2">Your attendance</p>
+              {clockedOut ? (
+                <p className="text-sm text-gray-600">
+                  <span className="font-medium text-[#2d5016]">Clocked out</span>
+                  {clockedHours != null ? ` · ${clockedHours} hrs` : ''}
+                  <span className="block text-xs text-gray-400 mt-0.5">
+                    {formatClock(shift.myClockInAt)} – {formatClock(shift.myClockOutAt)}
+                  </span>
+                </p>
+              ) : clockedIn ? (
+                <>
+                  <p className="text-sm text-gray-600 mb-2">Clocked in at {formatClock(shift.myClockInAt)}</p>
+                  {isShiftToday ? (
+                    <button onClick={() => handleClock('out')} disabled={clockLoading}
+                      className="w-full py-2.5 px-4 rounded-xl font-medium text-white text-sm bg-[#b45309] hover:bg-[#92400e] transition disabled:opacity-50">
+                      {clockLoading ? 'Saving…' : 'Clock Out'}
+                    </button>
+                  ) : (
+                    <p className="text-xs text-gray-400">Still clocked in — ask an admin to finalize your hours.</p>
+                  )}
+                </>
+              ) : isShiftToday ? (
+                <button onClick={() => handleClock('in')} disabled={clockLoading}
+                  className="w-full py-2.5 px-4 rounded-xl font-medium text-white text-sm bg-[#2d5016] hover:bg-[#1a3a0a] transition disabled:opacity-50">
+                  {clockLoading ? 'Saving…' : 'Clock In'}
+                </button>
+              ) : (
+                <p className="text-sm text-gray-500">Clock in opens on the day of your shift.</p>
+              )}
+            </div>
+          )}
 
           <div className="flex gap-3">
             {shift.slotsRemaining > 0 || shift.isSignedUp ? (

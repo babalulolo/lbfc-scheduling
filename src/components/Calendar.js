@@ -28,8 +28,10 @@ export default function Calendar() {
       const res = await fetch(`/api/shifts?month=${monthStr}`);
       const data = await res.json();
       setShifts(data.shifts || []);
+      return data.shifts || [];
     } catch (err) {
       console.error('Failed to fetch shifts:', err);
+      return [];
     } finally {
       setLoading(false);
     }
@@ -89,6 +91,24 @@ export default function Calendar() {
       setSelectedShift(null);
     } else {
       setMessage({ type: 'error', text: data.error || 'Failed to cancel' });
+    }
+    setTimeout(() => setMessage(null), 5000);
+  }
+
+  async function handleClock(shiftId, action) {
+    const res = await fetch('/api/shifts/clock', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shiftId, action }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      setMessage({ type: 'success', text: action === 'in' ? "You're clocked in." : "You're clocked out — thank you!" });
+      const updated = await fetchShifts();
+      const fresh = updated.find((s) => s.id === shiftId);
+      setSelectedShift(fresh || null); // keep modal open with refreshed state
+    } else {
+      setMessage({ type: 'error', text: data.error || 'Failed to update clock' });
     }
     setTimeout(() => setMessage(null), 5000);
   }
@@ -325,6 +345,7 @@ export default function Calendar() {
           onClose={() => setSelectedShift(null)}
           onSignup={handleSignup}
           onCancel={handleCancel}
+          onClock={handleClock}
         />
       )}
     </div>

@@ -29,12 +29,22 @@ export async function GET(request) {
           await Promise.all(
             signups.map(async (s) => {
               const u = await findUserById(s.userId);
-              return u ? { name: u.name, email: u.email, phone: u.phone, userId: u.id } : null;
+              return u
+                ? {
+                    name: u.name,
+                    email: u.email,
+                    phone: u.phone,
+                    userId: u.id,
+                    clockInAt: s.clockInAt || null,
+                    clockOutAt: s.clockOutAt || null,
+                  }
+                : null;
             })
           )
         ).filter(Boolean);
 
-        const isSignedUp = signups.some((s) => s.userId === user.id);
+        const mySignup = signups.find((s) => s.userId === user.id);
+        const isSignedUp = !!mySignup;
         const slotsRemaining = shift.slotsTotal - signups.length;
 
         return {
@@ -43,6 +53,8 @@ export async function GET(request) {
           signupCount: signups.length,
           slotsRemaining,
           isSignedUp,
+          myClockInAt: mySignup ? mySignup.clockInAt || null : null,
+          myClockOutAt: mySignup ? mySignup.clockOutAt || null : null,
         };
       })
     );
