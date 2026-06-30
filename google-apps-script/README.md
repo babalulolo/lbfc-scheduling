@@ -37,8 +37,24 @@ sync. `Code.gs` here is the recovery copy if it ever happens.
 4. **Deploy → New deployment → Web app** → Execute as **Me**, Access **Anyone**
 5. Copy the new URL into Railway's `SHEETS_WEBHOOK_URL`, then redeploy the app
 
-## Known gap
+## Two tabs
 
-The script currently handles `add` and `remove` only. The app also sends a
-`clock` action (clock-in/out hours); the script ignores it for now. Wire up an
-Attendance tab later if you want those hours in the sheet too.
+- **Calendar Import** — one row per signup. Row 1 banner, row 2 headers, data
+  from row 3, hidden key in column **J**. Unchanged, proven behavior.
+- **Attendance Tracker** — one row per signup (created on `add`). Columns A–O are
+  `Date · Event · Shift Start · Shift End · Volunteer Name · Email · Phone ·
+  Scheduled Hours · Showed Up · Check-in Time · Check-out Time · Actual Hours ·
+  No Show? · Calendar Event ID · Notes`. The match key is stored in a hidden
+  column **P**. Clock in/out fills **Check-in (J)**, **Check-out (K)**, and
+  **Actual Hours (L)** on that same row. `Showed Up`, `No Show?`, and `Notes`
+  are left for the coordinator.
+
+On cancellation (`remove`) the Calendar Import row is deleted and the Attendance
+row is cleared (values only — formatting and dropdowns are preserved so the row
+is reusable).
+
+## Redeploying after a script change
+
+Editing the code does NOT update the live web app on its own. After pasting a new
+version: **Deploy → Manage deployments → Edit (pencil) → Version: New version →
+Deploy**. The web-app URL stays the same, so Railway needs no change.

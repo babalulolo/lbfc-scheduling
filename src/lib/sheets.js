@@ -71,6 +71,7 @@ export async function syncSignupToSheet(action, shift, volunteer) {
     scheduledHours: computeScheduledHours(startTime, endTime),
     volunteerName: volunteer.name || '',
     volunteerEmail: volunteer.email || '',
+    volunteerPhone: volunteer.phone || '',
     eventDescription: shift.description || '',
     location: shift.location || shift.locationAddress || shift.location_address || '',
   });
