@@ -396,6 +396,24 @@ export async function updateShiftGroup(groupId, updates, fromDate) {
   });
 }
 
+export async function getShiftsByGroup(groupId) {
+  return withDb(async (db) => {
+    const { rows } = await db.query(
+      'SELECT * FROM shifts WHERE recurrence_group_id = $1 ORDER BY date ASC',
+      [groupId]
+    );
+    return rows.map(rowToShift);
+  });
+}
+
+// Attach (or change) a recurrence group on a single shift — used when adding
+// dates to a previously non-recurring shift turns it into a series.
+export async function setShiftRecurrenceGroup(id, groupId) {
+  return withDb(async (db) => {
+    await db.query('UPDATE shifts SET recurrence_group_id = $1 WHERE id = $2', [groupId, id]);
+  });
+}
+
 export async function deleteShift(id) {
   return withDb(async (db) => {
     await db.query('DELETE FROM shifts WHERE id = $1', [id]);

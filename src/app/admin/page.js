@@ -236,6 +236,8 @@ function ShiftsTab({ shifts, volunteers, showNewShift, setShowNewShift, editingS
   const [weekCount, setWeekCount] = useState(8);
   const [customDates, setCustomDates] = useState(new Set());
   const [editScope, setEditScope] = useState('one'); // 'one' | 'following' | 'all'
+  const [extraDates, setExtraDates] = useState(new Set());
+  const [addingDates, setAddingDates] = useState(false);
 
   useEffect(() => {
     if (editingShift) {
@@ -252,6 +254,7 @@ function ShiftsTab({ shifts, volunteers, showNewShift, setShowNewShift, editingS
       });
       setRepeat('none');
       setEditScope('one');
+      setExtraDates(new Set());
     }
   }, [editingShift]);
 
@@ -261,8 +264,33 @@ function ShiftsTab({ shifts, volunteers, showNewShift, setShowNewShift, editingS
     setWeekCount(8);
     setCustomDates(new Set());
     setEditScope('one');
+    setExtraDates(new Set());
     setShowNewShift(false);
     setEditingShift(null);
+  }
+
+  async function addDates() {
+    if (extraDates.size === 0) { flash('error', 'Pick at least one date to add.'); return; }
+    setAddingDates(true);
+    try {
+      const res = await fetch('/api/admin/shifts/add-dates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: editingShift.id, dates: [...extraDates].sort() }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        flash('success', data.added > 0 ? `Added ${data.added} date${data.added === 1 ? '' : 's'}` : (data.message || 'No new dates added'));
+        resetForm();
+        onRefresh();
+      } else {
+        flash('error', data.error || 'Failed to add dates');
+      }
+    } catch {
+      flash('error', 'Failed to add dates');
+    } finally {
+      setAddingDates(false);
+    }
   }
 
   async function handleSubmit(e) {
@@ -505,6 +533,21 @@ function ShiftsTab({ shifts, volunteers, showNewShift, setShowNewShift, editingS
                 ))}
               </div>
               <p className="text-xs text-gray-400 mt-2">The date always applies to just this shift; shared details (time, location, slots, notes) carry across the series.</p>
+            </div>
+          )}
+
+          {editingShift && (
+            <div className="mt-5 p-3 rounded-xl bg-gray-50 border border-gray-100">
+              <p className="text-sm font-medium text-gray-700 mb-1">Add more dates to this shift</p>
+              <p className="text-xs text-gray-400 mb-2">
+                Click dates to add new occurrences with these same details.
+                {!(editingShift.recurrenceGroupId || editingShift.recurrence_group_id) && ' This turns the shift into a recurring series.'}
+              </p>
+              <CustomCalendar customDates={extraDates} setCustomDates={setExtraDates} />
+              <button type="button" onClick={addDates} disabled={addingDates || extraDates.size === 0}
+                className="mt-3 px-4 py-2 rounded-xl bg-[#2d5016] text-white text-sm font-medium hover:bg-[#1a3a0a] transition disabled:opacity-40 whitespace-nowrap">
+                {addingDates ? 'Adding…' : `Add ${extraDates.size || ''} date${extraDates.size === 1 ? '' : 's'}`}
+              </button>
             </div>
           )}
 
