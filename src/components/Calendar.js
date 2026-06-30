@@ -324,7 +324,7 @@ export default function Calendar() {
                     className={`shift-pill ${shift.isSignedUp ? 'signed-up' : shift.slotsRemaining > 0 ? 'available' : 'full'}`}
                     title={`${shift.title} (${shift.slotsRemaining} spots left)`}
                   >
-                    {(shift.startTime || shift.start_time || '').slice(0, 5)} {shift.title}
+                    {formatTime(shift.startTime || shift.start_time)} {shift.title}
                   </div>
                 ))}
               </div>
