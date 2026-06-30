@@ -16,6 +16,7 @@ export async function GET() {
       name: u.name,
       phone: u.phone,
       role: u.role,
+      active: u.active,
       emergencyContactName: u.emergencyContactName,
       emergencyContactPhone: u.emergencyContactPhone,
       createdAt: u.createdAt,

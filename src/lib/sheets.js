@@ -123,3 +123,15 @@ export async function syncVolunteerToSheet(volunteer) {
     emergencyContact,
   });
 }
+
+/**
+ * Remove a volunteer's row from the "Volunteer Master" tab (matched by email).
+ * Used when an admin permanently removes a volunteer.
+ */
+export async function syncVolunteerRemoveFromSheet(volunteer) {
+  if (!volunteer || !volunteer.email) return;
+  await postToSheet({
+    action: 'volunteer_remove',
+    volunteerEmail: volunteer.email || '',
+  });
+}

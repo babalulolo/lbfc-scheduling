@@ -93,6 +93,11 @@ async function initDb() {
     ALTER TABLE shift_signups ADD COLUMN IF NOT EXISTS clock_in_at  TEXT;
     ALTER TABLE shift_signups ADD COLUMN IF NOT EXISTS clock_out_at TEXT;
   `);
+
+  // Migrate users for block/deactivate support
+  await pool.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
+  `);
 }
 
 async function withDb(fn) {
@@ -113,6 +118,7 @@ function rowToUser(row) {
     role: row.role,
     emergencyContactName: row.emergency_contact_name,
     emergencyContactPhone: row.emergency_contact_phone,
+    active: row.active !== false, // default true (column may be null on old rows)
     createdAt: row.created_at,
   };
 }
@@ -197,6 +203,48 @@ export async function getAllUsers() {
   return withDb(async (db) => {
     const { rows } = await db.query('SELECT * FROM users ORDER BY created_at');
     return rows.map(rowToUser);
+  });
+}
+
+// Block (active=false) or reactivate (active=true) a user.
+export async function setUserActive(userId, active) {
+  return withDb(async (db) => {
+    await db.query('UPDATE users SET active = $1 WHERE id = $2', [active, userId]);
+    if (!active) {
+      // Kill existing sessions so a blocked user is logged out immediately.
+      await db.query('DELETE FROM sessions WHERE user_id = $1', [userId]);
+    }
+  });
+}
+
+// Permanently delete a user. shift_signups cascade automatically; remove sessions explicitly.
+export async function deleteUser(userId) {
+  return withDb(async (db) => {
+    await db.query('DELETE FROM sessions WHERE user_id = $1', [userId]);
+    await db.query('DELETE FROM users WHERE id = $1', [userId]);
+  });
+}
+
+// Count active admins — used to prevent removing/blocking the last one.
+export async function countActiveAdmins() {
+  return withDb(async (db) => {
+    const { rows } = await db.query(
+      "SELECT COUNT(*)::int AS n FROM users WHERE role = 'admin' AND active = TRUE"
+    );
+    return rows[0].n;
+  });
+}
+
+// Shifts a user is signed up for — used to clean their rows from the sheet on removal.
+export async function getSignupsForUser(userId) {
+  return withDb(async (db) => {
+    const { rows } = await db.query(
+      `SELECT s.* FROM shift_signups su
+         JOIN shifts s ON s.id = su.shift_id
+        WHERE su.user_id = $1`,
+      [userId]
+    );
+    return rows.map(rowToShift);
   });
 }
 

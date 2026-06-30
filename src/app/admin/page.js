@@ -124,7 +124,7 @@ export default function AdminPage() {
             flash={flash}
           />
         )}
-        {tab === 'volunteers' && <VolunteersTab volunteers={volunteers} />}
+        {tab === 'volunteers' && <VolunteersTab volunteers={volunteers} currentUserId={user.id} onRefresh={fetchData} flash={flash} />}
         {tab === 'access codes' && <AccessCodesTab codes={accessCodes} onRefresh={fetchData} flash={flash} />}
       </main>
     </div>
@@ -715,9 +715,10 @@ function ManageVolunteers({ shift, volunteers, onRefresh, flash }) {
 
 // ─── Volunteers tab ───────────────────────────────────────────────────────────
 
-function VolunteersTab({ volunteers }) {
+function VolunteersTab({ volunteers, currentUserId, onRefresh, flash }) {
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
+  const [busyId, setBusyId] = useState(null);
 
   async function syncToSheet() {
     setSyncing(true);
@@ -735,6 +736,61 @@ function VolunteersTab({ volunteers }) {
     } finally {
       setSyncing(false);
     }
+  }
+
+  async function manage(v, action) {
+    if (
+      action === 'remove' &&
+      !window.confirm(
+        `Permanently remove ${v.name}? This deletes their account, signups, and hours, and pulls them from the Google Sheet. This can't be undone.`
+      )
+    ) {
+      return;
+    }
+    setBusyId(v.id);
+    try {
+      const res = await fetch('/api/admin/volunteers/manage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: v.id, action }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const verb = action === 'remove' ? 'removed' : action === 'block' ? 'blocked' : 'reactivated';
+        flash('success', `${v.name} ${verb}.`);
+        onRefresh();
+      } else {
+        flash('error', data.error || 'Action failed.');
+      }
+    } catch {
+      flash('error', 'Action failed.');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  function ActionButtons({ v }) {
+    if (v.id === currentUserId) return <span className="text-xs text-gray-300">—</span>;
+    const busy = busyId === v.id;
+    return (
+      <div className="flex gap-2 justify-end">
+        {v.active === false ? (
+          <button onClick={() => manage(v, 'unblock')} disabled={busy}
+            className="px-2.5 py-1 rounded-lg text-xs font-medium border border-green-200 text-green-700 hover:bg-green-50 disabled:opacity-40 whitespace-nowrap">
+            Unblock
+          </button>
+        ) : (
+          <button onClick={() => manage(v, 'block')} disabled={busy}
+            className="px-2.5 py-1 rounded-lg text-xs font-medium border border-amber-200 text-amber-700 hover:bg-amber-50 disabled:opacity-40 whitespace-nowrap">
+            Block
+          </button>
+        )}
+        <button onClick={() => manage(v, 'remove')} disabled={busy}
+          className="px-2.5 py-1 rounded-lg text-xs font-medium border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-40 whitespace-nowrap">
+          Remove
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -756,16 +812,22 @@ function VolunteersTab({ volunteers }) {
           {/* Mobile: card view */}
           <div className="sm:hidden space-y-3">
             {volunteers.map((v) => (
-              <div key={v.id} className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+              <div key={v.id} className={`rounded-xl border p-4 shadow-sm ${v.active === false ? 'border-amber-200 bg-amber-50/40' : 'border-gray-100 bg-white'}`}>
                 <div className="flex items-center justify-between mb-2">
                   <p className="font-semibold">{v.name}</p>
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${v.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}`}>
-                    {v.role}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {v.active === false && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">blocked</span>
+                    )}
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${v.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}`}>
+                      {v.role}
+                    </span>
+                  </div>
                 </div>
                 <p className="text-sm text-gray-500">{v.email}</p>
                 {v.phone && <p className="text-sm text-gray-500">{v.phone}</p>}
                 <p className="text-xs text-gray-400 mt-1">Joined {new Date(v.createdAt || v.created_at).toLocaleDateString()}</p>
+                <div className="mt-3"><ActionButtons v={v} /></div>
               </div>
             ))}
           </div>
@@ -779,12 +841,13 @@ function VolunteersTab({ volunteers }) {
                   <th className="text-left py-3 px-4 font-medium text-gray-500">Email</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-500">Phone</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-500">Role</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-500">Joined</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-500">Status</th>
+                  <th className="text-right py-3 px-4 font-medium text-gray-500">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {volunteers.map((v) => (
-                  <tr key={v.id} className="border-b border-gray-50 last:border-0">
+                  <tr key={v.id} className={`border-b border-gray-50 last:border-0 ${v.active === false ? 'bg-amber-50/40' : ''}`}>
                     <td className="py-3 px-4 font-medium">{v.name}</td>
                     <td className="py-3 px-4 text-gray-500">{v.email}</td>
                     <td className="py-3 px-4 text-gray-500">{v.phone || '—'}</td>
@@ -793,7 +856,12 @@ function VolunteersTab({ volunteers }) {
                         {v.role}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-gray-400">{new Date(v.createdAt || v.created_at).toLocaleDateString()}</td>
+                    <td className="py-3 px-4">
+                      {v.active === false
+                        ? <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Blocked</span>
+                        : <span className="text-xs text-gray-400">Active</span>}
+                    </td>
+                    <td className="py-3 px-4"><ActionButtons v={v} /></td>
                   </tr>
                 ))}
               </tbody>

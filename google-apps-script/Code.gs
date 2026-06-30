@@ -77,6 +77,10 @@ function doPost(e) {
       var vrow = volunteerUpsert(ss, body);
       return json({ ok: true, action: 'volunteer_upsert', row: vrow });
     }
+    if (body.action === 'volunteer_remove') {
+      var vcleared = volunteerRemove(ss, body);
+      return json({ ok: true, action: 'volunteer_remove', cleared: vcleared });
+    }
     return json({ ok: true, action: 'ignored' });
   } catch (err) {
     return json({ ok: false, error: String(err) });
@@ -166,6 +170,18 @@ function volunteerUpsert(ss, b) {
   sheet.getRange(row, VOL.phone).setValue(b.volunteerPhone || '');
   if (b.emergencyContact) sheet.getRange(row, VOL.emergencyContact).setValue(b.emergencyContact);
   return row;
+}
+
+// Clear a volunteer's row (matched by email); keeps formatting + dropdowns.
+function volunteerRemove(ss, b) {
+  var sheet = ss.getSheetByName(VOL_SHEET);
+  if (!sheet) return false;
+  var email = String(b.volunteerEmail || '').trim();
+  if (!email) return false;
+  var row = findRowByKey(sheet, VOL_FIRST_ROW, VOL.email, email);
+  if (row === -1) return false;
+  sheet.getRange(row, 1, 1, VOL.notes).clearContent(); // clear A–J values
+  return true;
 }
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────

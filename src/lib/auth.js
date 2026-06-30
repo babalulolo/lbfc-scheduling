@@ -21,6 +21,7 @@ export async function getSession() {
 
   const user = await getDbSessionUser(token);
   if (!user) return null;
+  if (user.active === false) return null; // blocked users are locked out everywhere
 
   return {
     id: user.id,

@@ -59,7 +59,9 @@ is reusable).
   writes **Name, Email, Phone, Emergency Contact** (name + phone combined) and
   leaves the rest for the coordinator / sheet formulas. Fired by `volunteer_upsert`
   on registration, and in bulk by the admin "Sync to Google Sheet" button
-  (POST `/api/admin/volunteers/sync`).
+  (POST `/api/admin/volunteers/sync`). When an admin permanently **removes** a
+  volunteer, `volunteer_remove` clears their Volunteer Master row and their
+  signup rows are removed from Calendar Import + Attendance.
 
 ## Redeploying after a script change
 
