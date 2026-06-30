@@ -2,16 +2,18 @@
  * LBFC Volunteer Schedule — sheet sync
  * ------------------------------------------------
  * Lives INSIDE the master Google Sheet (Extensions → Apps Script).
- * The scheduling app POSTs JSON events here; this script writes them into two tabs:
+ * The scheduling app POSTs JSON events here; this script writes them into:
  *
- *   "Calendar Import"     — one row per signup (unchanged, proven behavior)
+ *   "Calendar Import"     — one row per signup
  *   "Attendance Tracker"  — one row per signup; clock in/out fills Check-in /
- *                           Check-out / Actual Hours on the SAME row.
+ *                           Check-out / Actual Hours on the SAME row
+ *   "Volunteer Master"    — one row per volunteer (upserted by email)
  *
  * Actions (sent by src/lib/sheets.js):
- *   add    → append Calendar Import row + create Attendance row (static info)
- *   remove → delete Calendar Import row + clear the Attendance row (cancellation)
- *   clock  → set Check-in / Check-out / Actual Hours on the Attendance row
+ *   add              → Calendar Import row + Attendance row (static info)
+ *   remove           → delete Calendar Import row + clear the Attendance row
+ *   clock            → set Check-in / Check-out / Actual Hours on the Attendance row
+ *   volunteer_upsert → create/update the volunteer's row in Volunteer Master
  *
  * SETUP: set SECRET to match the app's SHEETS_WEBHOOK_SECRET (Railway).
  * After editing: Deploy → Manage deployments → Edit → Version: New version → Deploy
@@ -27,15 +29,23 @@ var CAL_FIRST_ROW = 3;
 var CAL_KEY_COL   = 10; // column J
 
 // Attendance Tracker: row 1 banner, row 2 headers, data from row 3.
-// Visible columns A–O; we store the match key in a hidden column P.
+// Visible columns A–O; match key stored in a hidden column P.
 var ATT_SHEET     = 'Attendance Tracker';
 var ATT_FIRST_ROW = 3;
 var ATT_KEY_COL   = 16; // column P (hidden key)
-var ATT = {           // 1-based column positions
+var ATT = {
   date: 1, event: 2, shiftStart: 3, shiftEnd: 4,
   volunteerName: 5, email: 6, phone: 7, scheduledHours: 8,
   showedUp: 9, checkIn: 10, checkOut: 11, actualHours: 12,
   noShow: 13, calendarEventId: 14, notes: 15, key: 16,
+};
+
+// Volunteer Master: row 1 banner, row 2 headers, data from row 3. Matched by email.
+var VOL_SHEET     = 'Volunteer Master';
+var VOL_FIRST_ROW = 3;
+var VOL = {
+  name: 1, email: 2, phone: 3, canDrive: 4, preferredRoles: 5,
+  emergencyContact: 6, totalHours: 7, eventsAttended: 8, noShows: 9, notes: 10,
 };
 
 // ─── ENTRY POINT ─────────────────────────────────────────────────────────────
@@ -63,6 +73,10 @@ function doPost(e) {
       var row = attendanceClock(ss, body);
       return json({ ok: true, action: 'clock', row: row });
     }
+    if (body.action === 'volunteer_upsert') {
+      var vrow = volunteerUpsert(ss, body);
+      return json({ ok: true, action: 'volunteer_upsert', row: vrow });
+    }
     return json({ ok: true, action: 'ignored' });
   } catch (err) {
     return json({ ok: false, error: String(err) });
@@ -75,7 +89,7 @@ function doGet() {
   return json({ ok: true, service: 'LBFC sheet sync', ready: true });
 }
 
-// ─── CALENDAR IMPORT (proven behavior) ───────────────────────────────────────
+// ─── CALENDAR IMPORT ─────────────────────────────────────────────────────────
 function calendarAdd(ss, b) {
   var sheet = ss.getSheetByName(CAL_SHEET);
   if (!sheet) return;
@@ -96,14 +110,11 @@ function calendarRemove(ss, b) {
 }
 
 // ─── ATTENDANCE TRACKER ──────────────────────────────────────────────────────
-// Create the row on signup with the static info; leave Showed Up / No Show? /
-// Notes for the coordinator. Clock in/out fills Check-in, Check-out, Actual Hours.
 function attendanceAdd(ss, b) {
   var sheet = ss.getSheetByName(ATT_SHEET);
   if (!sheet) return;
-  if (findRowByKey(sheet, ATT_FIRST_ROW, ATT_KEY_COL, b.signupKey) !== -1) return; // already exists
-  var row = firstEmptyAttendanceRow(sheet);
-  writeAttendanceStatic(sheet, row, b);
+  if (findRowByKey(sheet, ATT_FIRST_ROW, ATT_KEY_COL, b.signupKey) !== -1) return;
+  writeAttendanceStatic(sheet, firstEmptyRow(sheet, ATT_FIRST_ROW, ATT.date, ATT.key), b);
 }
 
 function attendanceRemove(ss, b) {
@@ -111,8 +122,7 @@ function attendanceRemove(ss, b) {
   if (!sheet) return false;
   var row = findRowByKey(sheet, ATT_FIRST_ROW, ATT_KEY_COL, b.signupKey);
   if (row === -1) return false;
-  // Clear values A–P but keep formatting + dropdown rules so the row is reusable.
-  sheet.getRange(row, 1, 1, ATT_KEY_COL).clearContent();
+  sheet.getRange(row, 1, 1, ATT_KEY_COL).clearContent(); // keep formatting + dropdowns
   return true;
 }
 
@@ -121,8 +131,7 @@ function attendanceClock(ss, b) {
   if (!sheet) return -1;
   var row = findRowByKey(sheet, ATT_FIRST_ROW, ATT_KEY_COL, b.signupKey);
   if (row === -1) {
-    // Signup row missing (e.g. integration added after signup) — create a minimal one.
-    row = firstEmptyAttendanceRow(sheet);
+    row = firstEmptyRow(sheet, ATT_FIRST_ROW, ATT.date, ATT.key);
     writeAttendanceStatic(sheet, row, b);
   }
   if (b.clockIn !== undefined)  sheet.getRange(row, ATT.checkIn).setValue(b.clockIn || '');
@@ -133,35 +142,46 @@ function attendanceClock(ss, b) {
   return row;
 }
 
-// Write the static signup columns (A–H) + hidden key (P); leave I–O untouched.
 function writeAttendanceStatic(sheet, row, b) {
   sheet.getRange(row, ATT.date, 1, 8).setValues([[
-    b.date || '',
-    b.event || '',
-    b.shiftStart || '',
-    b.shiftEnd || '',
-    b.volunteerName || '',
-    b.volunteerEmail || '',
-    b.volunteerPhone || '',
+    b.date || '', b.event || '', b.shiftStart || '', b.shiftEnd || '',
+    b.volunteerName || '', b.volunteerEmail || '', b.volunteerPhone || '',
     (b.scheduledHours === undefined ? '' : b.scheduledHours),
   ]]);
   sheet.getRange(row, ATT.key).setValue(b.signupKey || '');
 }
 
-// First row (from row 3) with both Date and key empty; else the next new row.
-function firstEmptyAttendanceRow(sheet) {
+// ─── VOLUNTEER MASTER ────────────────────────────────────────────────────────
+// Upsert by email. Writes Name / Email / Phone / Emergency Contact; leaves
+// Can Drive?, Preferred Roles, Total Hours, Events Attended, No Shows, Notes.
+function volunteerUpsert(ss, b) {
+  var sheet = ss.getSheetByName(VOL_SHEET);
+  if (!sheet) return -1;
+  var email = String(b.volunteerEmail || '').trim();
+  if (!email) return -1;
+  var row = findRowByKey(sheet, VOL_FIRST_ROW, VOL.email, email);
+  if (row === -1) row = firstEmptyRow(sheet, VOL_FIRST_ROW, VOL.name, VOL.email);
+  sheet.getRange(row, VOL.name).setValue(b.volunteerName || '');
+  sheet.getRange(row, VOL.email).setValue(email);
+  sheet.getRange(row, VOL.phone).setValue(b.volunteerPhone || '');
+  if (b.emergencyContact) sheet.getRange(row, VOL.emergencyContact).setValue(b.emergencyContact);
+  return row;
+}
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+// First row (from firstRow) where BOTH colA and colB are empty; else next new row.
+function firstEmptyRow(sheet, firstRow, colA, colB) {
   var last = sheet.getLastRow();
-  if (last < ATT_FIRST_ROW) return ATT_FIRST_ROW;
-  var n = last - ATT_FIRST_ROW + 1;
-  var dates = sheet.getRange(ATT_FIRST_ROW, ATT.date, n, 1).getValues();
-  var keys  = sheet.getRange(ATT_FIRST_ROW, ATT.key, n, 1).getValues();
+  if (last < firstRow) return firstRow;
+  var n = last - firstRow + 1;
+  var a = sheet.getRange(firstRow, colA, n, 1).getValues();
+  var b = sheet.getRange(firstRow, colB, n, 1).getValues();
   for (var i = 0; i < n; i++) {
-    if (!String(dates[i][0]).trim() && !String(keys[i][0]).trim()) return ATT_FIRST_ROW + i;
+    if (!String(a[i][0]).trim() && !String(b[i][0]).trim()) return firstRow + i;
   }
   return last + 1;
 }
 
-// ─── HELPERS ─────────────────────────────────────────────────────────────────
 function findRowByKey(sheet, firstRow, keyCol, key) {
   if (!key) return -1;
   var last = sheet.getLastRow();

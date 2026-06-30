@@ -53,6 +53,14 @@ On cancellation (`remove`) the Calendar Import row is deleted and the Attendance
 row is cleared (values only — formatting and dropdowns are preserved so the row
 is reusable).
 
+- **Volunteer Master** — one row per volunteer, **upserted by email**. Columns
+  A–J are `Volunteer Name · Email · Phone · Can Drive? · Preferred Roles ·
+  Emergency Contact · Total Hours · Events Attended · No Shows · Notes`. The app
+  writes **Name, Email, Phone, Emergency Contact** (name + phone combined) and
+  leaves the rest for the coordinator / sheet formulas. Fired by `volunteer_upsert`
+  on registration, and in bulk by the admin "Sync to Google Sheet" button
+  (POST `/api/admin/volunteers/sync`).
+
 ## Redeploying after a script change
 
 Editing the code does NOT update the live web app on its own. After pasting a new

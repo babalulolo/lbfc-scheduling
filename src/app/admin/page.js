@@ -716,9 +716,39 @@ function ManageVolunteers({ shift, volunteers, onRefresh, flash }) {
 // ─── Volunteers tab ───────────────────────────────────────────────────────────
 
 function VolunteersTab({ volunteers }) {
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState('');
+
+  async function syncToSheet() {
+    setSyncing(true);
+    setSyncMsg('');
+    try {
+      const res = await fetch('/api/admin/volunteers/sync', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        setSyncMsg(`Synced ${data.synced} volunteer${data.synced === 1 ? '' : 's'} to the sheet.`);
+      } else {
+        setSyncMsg(data.error || 'Sync failed.');
+      }
+    } catch {
+      setSyncMsg('Sync failed.');
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   return (
     <div>
-      <h2 className="text-lg font-semibold mb-4">Volunteers ({volunteers.length})</h2>
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+        <h2 className="text-lg font-semibold">Volunteers ({volunteers.length})</h2>
+        <div className="flex items-center gap-3">
+          {syncMsg && <span className="text-sm text-gray-500">{syncMsg}</span>}
+          <button onClick={syncToSheet} disabled={syncing}
+            className="px-4 py-1.5 rounded-lg bg-[#2d5016] text-white text-sm font-medium hover:bg-[#1a3a0a] transition disabled:opacity-40 whitespace-nowrap">
+            {syncing ? 'Syncing…' : 'Sync to Google Sheet'}
+          </button>
+        </div>
+      </div>
       {volunteers.length === 0 ? (
         <p className="text-gray-400 text-center py-12">No volunteers yet.</p>
       ) : (

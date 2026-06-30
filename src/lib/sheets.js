@@ -102,3 +102,24 @@ export async function syncClockToSheet(shift, volunteer, signup) {
     actualHours: hoursBetween(signup.clockInAt, signup.clockOutAt),
   });
 }
+
+/**
+ * Sync one volunteer (app user) to the "Volunteer Master" tab.
+ * Upserted by email: writes Name / Email / Phone / Emergency Contact, and
+ * leaves the manual & derived columns (Can Drive?, Preferred Roles, Total
+ * Hours, Events Attended, No Shows, Notes) untouched.
+ * @param {object} volunteer ({ name, email, phone, emergencyContactName, emergencyContactPhone })
+ */
+export async function syncVolunteerToSheet(volunteer) {
+  if (!volunteer || !volunteer.email) return;
+  const emergencyContact = [volunteer.emergencyContactName, volunteer.emergencyContactPhone]
+    .filter(Boolean)
+    .join(' · '); // "Name · 555-1234"
+  await postToSheet({
+    action: 'volunteer_upsert',
+    volunteerName: volunteer.name || '',
+    volunteerEmail: volunteer.email || '',
+    volunteerPhone: volunteer.phone || '',
+    emergencyContact,
+  });
+}

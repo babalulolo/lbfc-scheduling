@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { findUser, createUser, validateAccessCode } from '@/lib/db';
 import { createSession, setSessionCookie } from '@/lib/auth';
+import { syncVolunteerToSheet } from '@/lib/sheets';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -38,6 +39,13 @@ export async function POST(request) {
       emergencyContactPhone: emergencyContactPhone || null,
       createdAt: new Date().toISOString(),
     });
+
+    // Sync the new volunteer to the Google Sheet (non-blocking, no-op until configured)
+    try {
+      await syncVolunteerToSheet({ name, email, phone, emergencyContactName, emergencyContactPhone });
+    } catch (syncErr) {
+      console.error('Volunteer sheet sync error (non-blocking):', syncErr);
+    }
 
     const token = await createSession(id);
     await setSessionCookie(token);
