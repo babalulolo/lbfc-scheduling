@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import ShiftModal from './ShiftModal';
+import { todayLA } from '@/lib/time';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
@@ -19,8 +20,7 @@ export default function Calendar() {
   const month = currentDate.getMonth();
   const monthStr = `${year}-${String(month + 1).padStart(2, '0')}`;
 
-  const today = new Date();
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const todayStr = todayLA(); // Pacific 'YYYY-MM-DD'
 
   const fetchShifts = useCallback(async () => {
     setLoading(true);

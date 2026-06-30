@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { todayLA, formatClockLA } from '@/lib/time';
 
 export default function ShiftModal({ shift, onClose, onSignup, onCancel, onClock }) {
   const [loading, setLoading] = useState(false);
@@ -50,17 +51,11 @@ export default function ShiftModal({ shift, onClose, onSignup, onCancel, onClock
   }
 
   // ── Clock in/out state ──
-  const todayLA = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
-  const isShiftToday = shift.date === todayLA;
+  const isShiftToday = shift.date === todayLA();
   const clockedIn = !!shift.myClockInAt;
   const clockedOut = !!shift.myClockOutAt;
 
-  const formatClock = (iso) => {
-    if (!iso) return '';
-    return new Date(iso).toLocaleTimeString('en-US', {
-      hour: 'numeric', minute: '2-digit', timeZone: 'America/Los_Angeles',
-    });
-  };
+  const formatClock = formatClockLA;
 
   const clockedHours = (() => {
     if (!shift.myClockInAt || !shift.myClockOutAt) return null;

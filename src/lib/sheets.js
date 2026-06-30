@@ -11,6 +11,8 @@
 // deploy before the sheet side is configured. All failures are swallowed —
 // syncing to a spreadsheet must NEVER block or fail a volunteer signup.
 
+import { formatClockLA } from './time.js';
+
 function computeScheduledHours(startTime, endTime) {
   if (!startTime || !endTime) return '';
   const [sh, sm] = String(startTime).split(':').map(Number);
@@ -91,8 +93,11 @@ export async function syncClockToSheet(shift, volunteer, signup) {
     event: shift.title || '',
     volunteerName: volunteer.name || '',
     volunteerEmail: volunteer.email || '',
+    // Raw UTC ISO (kept for reference) + Pacific-formatted for the sheet.
     clockInAt: signup.clockInAt || '',
     clockOutAt: signup.clockOutAt || '',
+    clockIn: formatClockLA(signup.clockInAt),   // e.g. '9:03 AM' Pacific
+    clockOut: formatClockLA(signup.clockOutAt), // e.g. '1:15 PM' Pacific
     actualHours: hoursBetween(signup.clockInAt, signup.clockOutAt),
   });
 }

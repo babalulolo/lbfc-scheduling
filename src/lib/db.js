@@ -1,4 +1,5 @@
 import { Pool } from 'pg';
+import { todayLA } from './time.js';
 
 // ─── Connection pool ──────────────────────────────────────────────────────────
 const connectionString =
@@ -220,7 +221,7 @@ export async function getShifts(filter = {}) {
       params.push(filter.month + '%');
       query += ` WHERE date LIKE $${params.length}`;
     } else if (filter.fromToday) {
-      const today = new Date().toISOString().split('T')[0];
+      const today = todayLA(); // Pacific "today", not UTC
       params.push(today);
       query += ` WHERE date >= $${params.length}`;
     }

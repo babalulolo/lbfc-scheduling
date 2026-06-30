@@ -8,11 +8,7 @@ import {
 } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { syncClockToSheet } from '@/lib/sheets';
-
-// Today's date (YYYY-MM-DD) in Long Beach (Pacific) time
-function todayLA() {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
-}
+import { todayLA } from '@/lib/time';
 
 export async function POST(request) {
   try {

@@ -3,16 +3,18 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
+import { formatClockLA, isoToLocalInputLA, localInputToIsoLA, todayLA } from '@/lib/time';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function generateWeeklyDates(startDate, weeks) {
   if (!startDate || weeks < 1) return [];
   const result = [];
-  const d = new Date(startDate + 'T00:00:00');
+  // Noon-UTC + UTC stepping keeps this pure calendar-date math (no timezone drift).
+  const d = new Date(startDate + 'T12:00:00Z');
   for (let i = 0; i < weeks; i++) {
     result.push(d.toISOString().split('T')[0]);
-    d.setDate(d.getDate() + 7);
+    d.setUTCDate(d.getUTCDate() + 7);
   }
   return result;
 }
@@ -132,12 +134,9 @@ export default function AdminPage() {
 // ─── Mini calendar for custom date picking ────────────────────────────────────
 
 function CustomCalendar({ customDates, setCustomDates }) {
-  const now = new Date();
-  const [calYear, setCalYear] = useState(now.getFullYear());
-  const [calMonth, setCalMonth] = useState(now.getMonth());
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const todayStr = todayLA(); // 'YYYY-MM-DD' in Pacific
+  const [calYear, setCalYear] = useState(Number(todayStr.slice(0, 4)));
+  const [calMonth, setCalMonth] = useState(Number(todayStr.slice(5, 7)) - 1);
 
   const firstDay = new Date(calYear, calMonth, 1);
   const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
@@ -194,7 +193,7 @@ function CustomCalendar({ customDates, setCustomDates }) {
             const dPad = String(d).padStart(2, '0');
             const dateStr = `${calYear}-${mPad}-${dPad}`;
             const isSelected = customDates.has(dateStr);
-            const isPast = new Date(dateStr + 'T00:00:00') < today;
+            const isPast = dateStr < todayStr; // string compare, timezone-proof
             return (
               <button key={i} type="button"
                 onClick={() => !isPast && toggleDate(dateStr)}
@@ -536,9 +535,9 @@ function ShiftsTab({ shifts, volunteers, showNewShift, setShowNewShift, editingS
 
 // ─── Clock-time helpers ───────────────────────────────────────────────────────
 
+// Pacific-time clock display (never browser-local / UTC).
 function fmtClock(iso) {
-  if (!iso) return '';
-  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return formatClockLA(iso);
 }
 
 function clockHours(inIso, outIso) {
@@ -547,20 +546,14 @@ function clockHours(inIso, outIso) {
   return ms > 0 ? Math.round((ms / 3600000) * 10) / 10 : null;
 }
 
-// ISO → value for a <input type="datetime-local"> (browser-local time)
+// ISO → value for <input type="datetime-local">, shown as Pacific wall-clock.
 function isoToInput(iso) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return '';
-  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
-  return local.toISOString().slice(0, 16);
+  return isoToLocalInputLA(iso);
 }
 
-// datetime-local value (browser-local) → ISO string
+// datetime-local value (entered as Pacific wall-clock) → UTC ISO string.
 function inputToIso(val) {
-  if (!val) return null;
-  const d = new Date(val);
-  return isNaN(d.getTime()) ? null : d.toISOString();
+  return localInputToIsoLA(val);
 }
 
 function ClockRow({ shift, signup, onRemove, onRefresh, flash, busy }) {
