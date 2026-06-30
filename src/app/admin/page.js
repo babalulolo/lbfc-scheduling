@@ -235,6 +235,7 @@ function ShiftsTab({ shifts, volunteers, showNewShift, setShowNewShift, editingS
   const [repeat, setRepeat] = useState('none');    // 'none' | 'weekly' | 'custom'
   const [weekCount, setWeekCount] = useState(8);
   const [customDates, setCustomDates] = useState(new Set());
+  const [editScope, setEditScope] = useState('one'); // 'one' | 'following' | 'all'
 
   useEffect(() => {
     if (editingShift) {
@@ -250,6 +251,7 @@ function ShiftsTab({ shifts, volunteers, showNewShift, setShowNewShift, editingS
         slotsTotal: editingShift.slotsTotal || editingShift.slots_total || 5,
       });
       setRepeat('none');
+      setEditScope('one');
     }
   }, [editingShift]);
 
@@ -258,6 +260,7 @@ function ShiftsTab({ shifts, volunteers, showNewShift, setShowNewShift, editingS
     setRepeat('none');
     setWeekCount(8);
     setCustomDates(new Set());
+    setEditScope('one');
     setShowNewShift(false);
     setEditingShift(null);
   }
@@ -266,14 +269,26 @@ function ShiftsTab({ shifts, volunteers, showNewShift, setShowNewShift, editingS
     e.preventDefault();
 
     if (editingShift) {
-      // Single edit — always just this one
+      const isRecurring = !!(editingShift.recurrenceGroupId || editingShift.recurrence_group_id);
+      const scope = isRecurring ? editScope : 'one';
       const res = await fetch('/api/admin/shifts', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, id: editingShift.id }),
+        body: JSON.stringify({ ...form, id: editingShift.id, scope }),
       });
-      if (res.ok) { flash('success', 'Shift updated'); resetForm(); onRefresh(); }
-      else { const d = await res.json(); flash('error', d.error || 'Failed'); }
+      if (res.ok) {
+        const msg = scope === 'all'
+          ? 'All shifts in the series updated'
+          : scope === 'following'
+          ? 'This and future shifts updated'
+          : 'Shift updated';
+        flash('success', msg);
+        resetForm();
+        onRefresh();
+      } else {
+        const d = await res.json();
+        flash('error', d.error || 'Failed');
+      }
       return;
     }
 
@@ -472,6 +487,26 @@ function ShiftsTab({ shifts, volunteers, showNewShift, setShowNewShift, editingS
             )}
 
           </div>{/* end grid */}
+
+          {editingShift && (editingShift.recurrenceGroupId || editingShift.recurrence_group_id) && (
+            <div className="mt-5 p-3 rounded-xl bg-blue-50 border border-blue-100">
+              <p className="text-sm font-medium text-gray-700 mb-2">↻ This is a recurring shift. Apply changes to:</p>
+              <div className="space-y-1.5">
+                {[
+                  ['one', 'Only this shift'],
+                  ['following', 'This and all future shifts in the series'],
+                  ['all', 'All shifts in the series'],
+                ].map(([val, label]) => (
+                  <label key={val} className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                    <input type="radio" name="editScope" value={val} checked={editScope === val}
+                      onChange={() => setEditScope(val)} className="accent-[#2d5016]" />
+                    {label}
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-gray-400 mt-2">The date always applies to just this shift; shared details (time, location, slots, notes) carry across the series.</p>
+            </div>
+          )}
 
           <div className="flex gap-3 mt-5">
             <button type="submit"

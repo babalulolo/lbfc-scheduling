@@ -353,6 +353,49 @@ export async function updateShift(id, updates) {
   });
 }
 
+// Update shared fields across a recurrence group. `date` is intentionally
+// excluded — each occurrence keeps its own date. If fromDate is given, only
+// occurrences on or after that date are updated ("this and future").
+export async function updateShiftGroup(groupId, updates, fromDate) {
+  return withDb(async (db) => {
+    const fields = [];
+    const params = [];
+
+    const colMap = {
+      title: 'title',
+      description: 'description',
+      startTime: 'start_time',
+      endTime: 'end_time',
+      location: 'location',
+      locationAddress: 'location_address',
+      notes: 'notes',
+      slotsTotal: 'slots_total',
+    };
+
+    for (const [key, col] of Object.entries(colMap)) {
+      if (key in updates) {
+        params.push(updates[key]);
+        fields.push(`${col} = $${params.length}`);
+      }
+    }
+
+    if (fields.length === 0) return 0;
+
+    params.push(groupId);
+    let where = `recurrence_group_id = $${params.length}`;
+    if (fromDate) {
+      params.push(fromDate);
+      where += ` AND date >= $${params.length}`;
+    }
+
+    const { rowCount } = await db.query(
+      `UPDATE shifts SET ${fields.join(', ')} WHERE ${where}`,
+      params
+    );
+    return rowCount;
+  });
+}
+
 export async function deleteShift(id) {
   return withDb(async (db) => {
     await db.query('DELETE FROM shifts WHERE id = $1', [id]);

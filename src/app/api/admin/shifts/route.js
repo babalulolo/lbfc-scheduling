@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createShift, updateShift, deleteShift, getShiftById } from '@/lib/db';
+import { createShift, updateShift, updateShiftGroup, deleteShift, getShiftById } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -63,7 +63,7 @@ export async function PUT(request) {
     }
 
     const {
-      id, title, description, date, startTime, endTime,
+      id, scope, title, description, date, startTime, endTime,
       location, locationAddress, notes, slotsTotal,
     } = await request.json();
 
@@ -87,8 +87,18 @@ export async function PUT(request) {
     if (notes !== undefined) updates.notes = notes;
     if (slotsTotal !== undefined) updates.slotsTotal = slotsTotal;
 
+    // Always update this specific shift (date included — date is per-occurrence).
     await updateShift(id, updates);
-    return NextResponse.json({ success: true });
+
+    // Propagate shared fields to the rest of the series if requested.
+    // updateShiftGroup excludes `date`, so each occurrence keeps its own.
+    let seriesUpdated = 0;
+    if (existing.recurrenceGroupId && (scope === 'following' || scope === 'all')) {
+      const fromDate = scope === 'following' ? existing.date : null;
+      seriesUpdated = await updateShiftGroup(existing.recurrenceGroupId, updates, fromDate);
+    }
+
+    return NextResponse.json({ success: true, seriesUpdated });
   } catch (error) {
     console.error('Update shift error:', error);
     return NextResponse.json({ error: 'Something went wrong' }, { status: 500 });
