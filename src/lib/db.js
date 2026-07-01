@@ -98,6 +98,11 @@ async function initDb() {
   await pool.query(`
     ALTER TABLE users ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE;
   `);
+
+  // Migrate users for profile picture (stored as a small base64 data URL)
+  await pool.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT;
+  `);
 }
 
 async function withDb(fn) {
@@ -119,6 +124,7 @@ function rowToUser(row) {
     emergencyContactName: row.emergency_contact_name,
     emergencyContactPhone: row.emergency_contact_phone,
     active: row.active !== false, // default true (column may be null on old rows)
+    avatar: row.avatar || null,
     createdAt: row.created_at,
   };
 }
@@ -203,6 +209,31 @@ export async function getAllUsers() {
   return withDb(async (db) => {
     const { rows } = await db.query('SELECT * FROM users ORDER BY created_at');
     return rows.map(rowToUser);
+  });
+}
+
+// Update a user's own editable profile fields (name, phone, emergency, avatar).
+export async function updateUser(id, updates) {
+  return withDb(async (db) => {
+    const colMap = {
+      name: 'name',
+      phone: 'phone',
+      emergencyContactName: 'emergency_contact_name',
+      emergencyContactPhone: 'emergency_contact_phone',
+      avatar: 'avatar',
+    };
+    const fields = [];
+    const params = [];
+    for (const [key, col] of Object.entries(colMap)) {
+      if (key in updates) {
+        params.push(updates[key]);
+        fields.push(`${col} = $${params.length}`);
+      }
+    }
+    if (fields.length === 0) return findUserById(id);
+    params.push(id);
+    await db.query(`UPDATE users SET ${fields.join(', ')} WHERE id = $${params.length}`, params);
+    return findUserById(id);
   });
 }
 

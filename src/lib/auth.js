@@ -29,6 +29,7 @@ export async function getSession() {
     name: user.name,
     phone: user.phone,
     role: user.role,
+    avatarUrl: user.avatar ? `/api/avatar/${user.id}` : null,
   };
 }
 

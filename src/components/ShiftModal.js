@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { todayLA, formatClockLA } from '@/lib/time';
+import Avatar from '@/components/Avatar';
 
 export default function ShiftModal({ shift, onClose, onSignup, onCancel, onClock }) {
   const [loading, setLoading] = useState(false);
@@ -139,10 +140,15 @@ export default function ShiftModal({ shift, onClose, onSignup, onCancel, onClock
               <div className="flex items-start gap-3">
                 <span className="text-lg">✅</span>
                 <div>
-                  <p className="font-medium text-sm">Signed up:</p>
-                  <p className="text-sm text-gray-500">
-                    {shift.signups.map((s) => s.name).join(', ')}
-                  </p>
+                  <p className="font-medium text-sm mb-1.5">Signed up:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {shift.signups.map((s, i) => (
+                      <span key={i} className="inline-flex items-center gap-1.5 text-sm text-gray-600 bg-gray-50 rounded-full pl-1 pr-2.5 py-0.5">
+                        <Avatar src={s.avatarUrl} name={s.name} size={22} />
+                        {s.name}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}

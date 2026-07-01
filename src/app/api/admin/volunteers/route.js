@@ -17,6 +17,7 @@ export async function GET() {
       phone: u.phone,
       role: u.role,
       active: u.active,
+      avatarUrl: u.avatar ? `/api/avatar/${u.id}` : null,
       emergencyContactName: u.emergencyContactName,
       emergencyContactPhone: u.emergencyContactPhone,
       createdAt: u.createdAt,

@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Avatar from '@/components/Avatar';
 
 export default function Navbar({ user }) {
   const router = useRouter();
@@ -35,7 +36,10 @@ export default function Navbar({ user }) {
             Calendar
           </Link>
           <div className="flex items-center gap-3">
-            <span className="text-sm opacity-80 hidden sm:inline">{user?.name}</span>
+            <Link href="/profile" className="flex items-center gap-2 hover:bg-white/10 px-2 py-1 rounded-lg transition" title="My Profile">
+              <Avatar src={user?.avatarUrl} name={user?.name} size={28} />
+              <span className="text-sm opacity-80 hidden sm:inline">{user?.name}</span>
+            </Link>
             <button
               onClick={handleLogout}
               className="text-sm bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg transition"

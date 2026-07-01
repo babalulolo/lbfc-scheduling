@@ -35,6 +35,7 @@ export async function GET(request) {
                     email: u.email,
                     phone: u.phone,
                     userId: u.id,
+                    avatarUrl: u.avatar ? `/api/avatar/${u.id}` : null,
                     clockInAt: s.clockInAt || null,
                     clockOutAt: s.clockOutAt || null,
                   }
@@ -49,7 +50,7 @@ export async function GET(request) {
 
         return {
           ...shift,
-          signups: user.role === 'admin' ? signupDetails : signupDetails.map((s) => ({ name: s.name })),
+          signups: user.role === 'admin' ? signupDetails : signupDetails.map((s) => ({ name: s.name, avatarUrl: s.avatarUrl })),
           signupCount: signups.length,
           slotsRemaining,
           isSignedUp,

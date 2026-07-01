@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
+import Avatar from '@/components/Avatar';
 import { formatClockLA, isoToLocalInputLA, localInputToIsoLA, todayLA } from '@/lib/time';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -892,7 +893,10 @@ function VolunteersTab({ volunteers, currentUserId, onRefresh, flash }) {
             {volunteers.map((v) => (
               <div key={v.id} className={`rounded-xl border p-4 shadow-sm ${v.active === false ? 'border-amber-200 bg-amber-50/40' : 'border-gray-100 bg-white'}`}>
                 <div className="flex items-center justify-between mb-2">
-                  <p className="font-semibold">{v.name}</p>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Avatar src={v.avatarUrl} name={v.name} size={32} />
+                    <p className="font-semibold truncate">{v.name}</p>
+                  </div>
                   <div className="flex items-center gap-1.5">
                     {v.active === false && (
                       <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">blocked</span>
@@ -926,7 +930,12 @@ function VolunteersTab({ volunteers, currentUserId, onRefresh, flash }) {
               <tbody>
                 {volunteers.map((v) => (
                   <tr key={v.id} className={`border-b border-gray-50 last:border-0 ${v.active === false ? 'bg-amber-50/40' : ''}`}>
-                    <td className="py-3 px-4 font-medium">{v.name}</td>
+                    <td className="py-3 px-4 font-medium">
+                      <div className="flex items-center gap-2">
+                        <Avatar src={v.avatarUrl} name={v.name} size={28} />
+                        {v.name}
+                      </div>
+                    </td>
                     <td className="py-3 px-4 text-gray-500">{v.email}</td>
                     <td className="py-3 px-4 text-gray-500">{v.phone || '—'}</td>
                     <td className="py-3 px-4">
