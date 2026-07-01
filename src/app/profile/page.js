@@ -188,7 +188,7 @@ export default function ProfilePage() {
           <div>
             <label className="block text-sm font-medium text-gray-600 mb-1">Email</label>
             <input className={`${inputClass} bg-gray-50 text-gray-500`} value={form.email} disabled />
-            <p className="text-xs text-gray-400 mt-1">Email can't be changed here.</p>
+            <p className="text-xs text-gray-400 mt-1">Email can&apos;t be changed here.</p>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-600 mb-1">Phone</label>
